@@ -1,0 +1,26 @@
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Python cache
+__pycache__/
+
+# Virtual environment (if created locally, typically ignored)
+venv/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+
+# IDE/Editor specific files (common ones)
+.vscode/
+.idea/
+
+# Sensitive information (e.g., API keys, passwords) - IMPORTANT: Never commit .env files!
+.env
+
+# Other common ignores
+*.zip
