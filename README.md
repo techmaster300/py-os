@@ -1,4 +1,4 @@
-# BlindOS Simulator
+# py-os Simulator
 
 An accessible operating system simulator for blind and visually impaired users.
 
@@ -30,12 +30,12 @@ To enable direct NVDA support:
 
 ## Installation Guide for GitHub
 
-To get started with BlindOS and prepare it for use from source:
+To get started with py-os and prepare it for use from source:
 
 1.  **Clone the repository:**
-    First, clone the project from GitHub to your local machine. Replace `<repository_url>` with the actual URL of your project's GitHub repository.
+    First, clone the proj
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/wasilewsk/py-os
     cd py-os 
     ```
 
@@ -70,4 +70,3 @@ To get started with BlindOS and prepare it for use from source:
     ```
 
 ---
-*Note: The compiled executable and build artifacts should be added to your `.gitignore` file if you are committing the source code to GitHub. This prevents large binary files from cluttering the repository.*
