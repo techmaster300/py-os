@@ -160,6 +160,9 @@ class DesktopFrame(wx.Frame):
         wx.CallAfter(self._return_focus, app_instance.name)
 
     def _return_focus(self, app_name):
+        # Update app_buttons list to remove any buttons that were destroyed
+        self.app_buttons = [btn for btn in self.app_buttons if btn and btn.IsShownOnScreen()]
+        
         if self.app_buttons:
             for btn in self.app_buttons:
                 if btn.GetLabel() == app_name:
