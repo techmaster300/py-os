@@ -49,3 +49,22 @@ class SystemAPI:
 
     def play_sound(self, sound_type):
         self.sounds.play(sound_type)
+
+    def notify(self, title: str, message: str, level: str = 'info'):
+        """
+        Sends a notification to the user.
+        Currently, this only supports spoken notifications.
+        Level can be 'info', 'warning', or 'error'.
+        """
+        full_message = f"{title}. {message}"
+        if level == 'warning':
+            full_message = f"Warning: {full_message}"
+        elif level == 'error':
+            full_message = f"Error: {full_message}"
+        
+        self.speak(full_message)
+        # Future enhancement: Add visual notification if GUI is available.
+        # For example, using wx.MessageDialog, but this requires context of the main window.
+        # if self.desktop.main_frame: # Assuming desktop has a reference to the main frame
+        #     wx.CallAfter(wx.MessageDialog, self.desktop.main_frame, message, title, style=wx.OK | (wx.ICON_WARNING if level == 'warning' else (wx.ICON_ERROR if level == 'error' else wx.ICON_INFORMATION))).ShowModal()
+

@@ -53,8 +53,8 @@ class ThemeCreatorApp(BlindApp):
         super().__init__(api)
         self.name = "Theme Creator"
         self.description = "Create your own sound theme."
-        # Updated docs to reflect file support
-        self.docs = "Theme Creator allows you to define custom tones or sound file paths for system events." 
+        # Updated docs to reflect file support and new event types
+        self.docs = "Theme Creator allows you to define custom tones or sound file paths for system events like startup, navigation, alerts, launch, close, alarms, and timers." 
 
         self.frame = wx.Frame(None, title="Theme Creator", size=(400, 400))
         panel = wx.Panel(self.frame)
@@ -79,7 +79,8 @@ class ThemeCreatorApp(BlindApp):
         # State variables for theme creation flow
         self.step = 0
         self.current_event_index = 0 # To track which sound event we are configuring
-        self.events = ["startup", "nav", "alert", "launch", "close"]
+        # Added "alarm" and "timer" to the events list
+        self.events = ["startup", "nav", "alert", "launch", "close", "alarm", "timer"] 
         self.new_theme = {} # Will store tones (list of lists) or file paths (string)
         self.theme_name = ""
         self.current_event = ""
@@ -138,10 +139,6 @@ class ThemeCreatorApp(BlindApp):
                 self.api.speak("Invalid frequency. Please enter a number.")
                 # Stay on step 2 to re-prompt for frequency
 
-        # Step 3 (file path input) is now handled directly by wx.FileDialog in step 1 logic.
-        # We don't need a separate step for file path input from text anymore.
-        # The flow directly advances if a file is selected.
-
     def advance_to_next_event(self):
         self.current_event_index += 1
         if self.current_event_index < len(self.events):
@@ -166,10 +163,9 @@ class ThemeCreatorApp(BlindApp):
             # Add the new theme to the in-memory themes dictionary
             self.api.sounds.themes[self.theme_name] = self.new_theme
             
-            # To make this theme persistent, we would need to save it to user_themes.json.
-            # This requires a save_custom_themes method in SoundManager that writes self.themes (or custom parts) to file.
-            # Example: self.api.sounds.save_custom_themes(self.new_theme, self.theme_name) 
-            # For now, it's only in memory.
+            # To make this theme persistent, we need to save it to user_themes.json.
+            # Call the newly implemented save_custom_themes method.
+            self.api.sounds.save_custom_themes() 
 
             # Apply the new theme immediately as the current theme
             self.api.sounds.save_theme_name(self.theme_name)

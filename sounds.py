@@ -60,10 +60,13 @@ class SoundManager:
         return {}
 
     def save_custom_themes(self):
-        # This method would be used to save any changes made to custom themes
-        # For now, we are only focusing on loading them.
-        # If we add theme creation/editing features, this will be implemented.
-        pass
+        # Save all current themes (default and custom) to user_themes.json
+        # This ensures that all themes, including any newly created ones, are persisted.
+        try:
+            with open(self.user_themes_path, "w") as f:
+                json.dump(self.themes, f, indent=4) # Use indent for readability
+        except Exception as e:
+            print(f"Error saving custom themes to {self.user_themes_path}: {e}")
 
     def load_theme_name(self):
         if not os.path.exists(self.data_dir):

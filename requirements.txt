@@ -1,2 +1,5 @@
 wxPython
 pyttsx3
+sounddevice
+numpy
+soundfile

@@ -3,11 +3,9 @@
 PyOS is a modular, accessible operating system simulator for the blind. This guide explains how to create your own applications (plugins).
 
 ## 1. Getting Started
-All apps are Python files located in the `/apps` directory. PyOS automatically discovers and loads any class that inherits from `BlindApp`.
+Create a new file in `apps/` (e.g., `my_app.py`). PyOS automatically discovers and loads any class that inherits from `BlindApp`.
 
 ## 2. Basic App Structure
-Create a new file in `apps/my_app.py`:
-
 ```python
 import wx
 from api import BlindApp
@@ -36,12 +34,22 @@ class MyApp(BlindApp):
 ## 3. The System API (`self.api`)
 | Method | Description |
 | :--- | :--- |
-| `speak(text, interrupt=True)` | Speaks text via NVDA or standard TTS. |
-| `play_sound(sound_type)` | Plays a themed sound (`nav`, `launch`, `close`, `alert`). |
-| `get_data_path(filename)` | Returns a path to a file in the user's `.py-os` folder. |
-| `get_vfs()` | Returns the Virtual File System kernel. |
+| `speak(text, interrupt=True)` | Speaks text via the system's speech engine. |
+| `play_sound(sound_type)` | Plays a themed sound (`nav`, `launch`, `close`, `alert`, `startup`, etc.). |
+| `get_data_path(filename)` | Returns a path to a file in the user's `.py-os` data directory. |
+| `get_vfs()` | Returns the Virtual File System kernel. **Note:** For direct host file system access, use the `os` module. |
+| `notify(title: str, message: str, level: str = 'info')` | Sends a notification to the user. Currently supports spoken notifications. `level` can be 'info', 'warning', or 'error'. |
 
 ## 4. Special Features
 - **F1 (Help)**: PyOS automatically reads your app's `self.help_text` when the user presses **F1**.
 - **Ctrl+D (Docs)**: PyOS reads your app's `self.docs` when the user presses **Ctrl+D**.
-- **Sound Themes**: Users can create custom sounds in the **Theme Creator**. Use `self.api.play_sound()` to stay consistent with the user's chosen theme.
+- **Sound Themes**: Users can create custom sounds in the **Theme Creator** app. Use `self.api.play_sound()` to stay consistent with the user's chosen theme.
+
+## 5. File System Access
+For applications needing to interact with the host file system (e.g., reading/writing files, browsing directories), use Python's built-in `os` module directly. Avoid using `self.api.get_vfs()` for host file system operations.
+
+## 6. Text Editor App
+A basic `TextEditorApp` is available for creating and editing text files. It can be launched via the application menu.
+
+## 7. Notifications
+Applications can now send notifications using `self.api.notify(title, message, level='info')`. This currently triggers a spoken notification. The `level` parameter can be used to indicate the severity ('info', 'warning', 'error'). Future enhancements may include visual notifications.
