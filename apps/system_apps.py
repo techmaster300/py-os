@@ -168,9 +168,17 @@ class SettingsApp(BlindApp):
         try:
             subprocess.run(["git", "remote", "set-url", "origin", "https://github.com/wasilewsk/py-os.git"], check=True)
             result = subprocess.run(["git", "pull", "origin", "master"], capture_output=True, text=True, check=True)
-            self.api.speak("Update completed successfully.")
+            
+            if "Already up to date" in result.stdout:
+                self.api.speak("System is already up to date. Checking requirements...")
+            else:
+                self.api.speak("Core updates downloaded. Updating requirements...")
+            
+            # Re-install requirements
+            subprocess.run(["pip", "install", "-r", "requirements.txt"], check=True)
+            self.api.speak("Update completed successfully. All dependencies are up to date.")
         except subprocess.CalledProcessError as e:
-            self.api.speak(f"Update failed: {e.stderr}")
+            self.api.speak(f"Update failed: {e.stderr if e.stderr else 'Check your internet connection or git status'}")
         except Exception as e:
             self.api.speak(f"Error during update: {e}")
 

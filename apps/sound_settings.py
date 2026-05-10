@@ -113,8 +113,9 @@ class ThemeCreatorApp(BlindApp):
                 self.api.speak(f"Enter frequency for {self.current_event} beep (e.g., 500).")
                 self.step = 2 # Next step is to input tone frequency
             elif self.sound_choice_mode == "file":
-                # Open file dialog for WAV files
-                dlg = wx.FileDialog(self.frame, "Choose a WAV file", wildcard="WAV files (*.wav)|*.wav", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+                # Open file dialog for audio files
+                wildcard = "Audio files (*.wav;*.mp3;*.ogg;*.flac)|*.wav;*.mp3;*.ogg;*.flac|WAV files (*.wav)|*.wav|MP3 files (*.mp3)|*.mp3|OGG files (*.ogg)|*.ogg|FLAC files (*.flac)|*.flac"
+                dlg = wx.FileDialog(self.frame, "Choose an audio file", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
                 if dlg.ShowModal() == wx.ID_OK:
                     file_path = dlg.GetPath()
                     self.new_theme[self.current_event] = file_path

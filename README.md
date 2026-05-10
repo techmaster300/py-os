@@ -52,7 +52,13 @@ To get started with py-os and prepare it for use from source:
     # source venv/bin/activate
     ```
 
-3.  **Install dependencies:**
+3.  **Install FFmpeg:**
+    The system uses FFmpeg for audio playback. Install it via winget:
+    ```bash
+    winget install ffmpeg
+    ```
+
+4.  **Install dependencies:**
     Install all required Python packages using the `requirements.txt` file.
     ```bash
     pip install -r requirements.txt

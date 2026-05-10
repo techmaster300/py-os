@@ -1,6 +1,5 @@
 import wx
 import threading
-import winsound
 import time
 import json
 import os
@@ -47,9 +46,7 @@ class TimerApp(BlindApp):
     def run_timer(self, seconds):
         time.sleep(seconds)
         self.api.speak("Timer finished!")
-        for _ in range(3):
-            winsound.Beep(1000, 200)
-            winsound.Beep(800, 200)
+        self.api.play_sound("alert")
         wx.CallAfter(self.on_close)
 
 class RemindersApp(BlindApp):
