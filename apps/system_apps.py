@@ -1,51 +1,171 @@
 import wx
 import os
 import datetime
-import subprocess # For executing files
-import importlib # For dynamic module loading
+import subprocess
+import importlib
+import json
 from api import BlindApp
-# Assuming LoonaConfig and ConfigStore are still relevant for general settings persistence if needed,
-# but they are not directly used by TextEditorApp in this basic implementation.
+
+try:
+    import sounddevice as sd
+    HAS_SOUNDDEVICE = True
+except ImportError:
+    HAS_SOUNDDEVICE = False
 
 class SettingsApp(BlindApp):
     def __init__(self, api):
         super().__init__(api)
         self.name = "System Settings"
-        self.description = "Configure voice speed and high contrast."
+        self.description = "Configure voice speed, audio devices, and updates."
         self.help_text = "Use Tab to navigate controls, and Enter to save."
-        self.docs = "Settings allows you to customize the OS behavior. Voice speed can be adjusted from 50 to 400."
+        self.docs = "Settings allows you to customize the OS behavior. Voice speed can be adjusted from 50 to 400. Configure audio input and output devices."
+        self.device_config_path = self.api.get_data_path("device_config.json")
 
     def run(self):
-        self.frame = wx.Frame(None, title="Settings", size=(400, 300))
+        self.frame = wx.Frame(None, title="Settings", size=(500, 600))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(30, 30, 30))
         
         sizer = wx.BoxSizer(wx.VERTICAL)
-        label = wx.StaticText(panel, label="Voice Speed:")
-        label.SetForegroundColour(wx.Colour(255, 255, 255))
-        sizer.Add(label, 0, wx.ALL, 10)
+        
+        # Title
+        title = wx.StaticText(panel, label="System Settings")
+        title.SetForegroundColour(wx.Colour(255, 255, 255))
+        title.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
+        
+        # Voice Speed Section
+        voice_label = wx.StaticText(panel, label="Voice Speed:")
+        voice_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        sizer.Add(voice_label, 0, wx.ALL, 10)
         
         self.speed_slider = wx.Slider(panel, value=200, minValue=50, maxValue=400, style=wx.SL_HORIZONTAL)
+        self.speed_slider.SetBackgroundColour(wx.Colour(40, 40, 40))
         sizer.Add(self.speed_slider, 0, wx.EXPAND | wx.ALL, 10)
         
+        # Audio Devices Section
+        if HAS_SOUNDDEVICE:
+            devices_label = wx.StaticText(panel, label="Audio Devices:")
+            devices_label.SetForegroundColour(wx.Colour(255, 255, 255))
+            devices_label.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            sizer.Add(devices_label, 0, wx.ALL, 10)
+            
+            # Input Device
+            input_label = wx.StaticText(panel, label="Input Device (Microphone):")
+            input_label.SetForegroundColour(wx.Colour(200, 200, 200))
+            sizer.Add(input_label, 0, wx.ALL, 8)
+            
+            input_devices = self.get_input_devices()
+            self.input_choice = wx.Choice(panel, choices=input_devices if input_devices else ["Default"])
+            self.input_choice.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.input_choice.SetForegroundColour(wx.Colour(255, 255, 255))
+            
+            # Load saved input device
+            config = self.load_device_config()
+            current_input = config.get("input_device", "Default")
+            if current_input in input_devices:
+                self.input_choice.SetSelection(input_devices.index(current_input))
+            else:
+                self.input_choice.SetSelection(0)
+            
+            sizer.Add(self.input_choice, 0, wx.EXPAND | wx.ALL, 8)
+            
+            # Output Device
+            output_label = wx.StaticText(panel, label="Output Device (Speaker):")
+            output_label.SetForegroundColour(wx.Colour(200, 200, 200))
+            sizer.Add(output_label, 0, wx.ALL, 8)
+            
+            output_devices = self.get_output_devices()
+            self.output_choice = wx.Choice(panel, choices=output_devices if output_devices else ["Default"])
+            self.output_choice.SetBackgroundColour(wx.Colour(40, 40, 40))
+            self.output_choice.SetForegroundColour(wx.Colour(255, 255, 255))
+            
+            # Load saved output device
+            current_output = config.get("output_device", "Default")
+            if current_output in output_devices:
+                self.output_choice.SetSelection(output_devices.index(current_output))
+            else:
+                self.output_choice.SetSelection(0)
+            
+            sizer.Add(self.output_choice, 0, wx.EXPAND | wx.ALL, 8)
+            
+            # Test button
+            test_btn = wx.Button(panel, label="Test Audio")
+            test_btn.SetBackgroundColour(wx.Colour(50, 50, 100))
+            test_btn.SetForegroundColour(wx.Colour(255, 255, 255))
+            test_btn.Bind(wx.EVT_BUTTON, self.on_test_audio)
+            sizer.Add(test_btn, 0, wx.EXPAND | wx.ALL, 8)
+        
+        # Update button
         update_btn = wx.Button(panel, label="Check for Updates")
+        update_btn.SetBackgroundColour(wx.Colour(50, 50, 50))
+        update_btn.SetForegroundColour(wx.Colour(255, 255, 255))
         update_btn.Bind(wx.EVT_BUTTON, self.check_updates)
-        sizer.Add(update_btn, 0, wx.ALL | wx.CENTER, 10)
+        sizer.Add(update_btn, 0, wx.EXPAND | wx.ALL, 10)
 
+        # Save and Close button
         close_btn = wx.Button(panel, label="Save and Close")
-        sizer.Add(close_btn, 0, wx.ALL | wx.CENTER, 20)
+        close_btn.SetBackgroundColour(wx.Colour(0, 100, 0))
+        close_btn.SetForegroundColour(wx.Colour(255, 255, 255))
+        close_btn.Bind(wx.EVT_BUTTON, self.on_close)
+        sizer.Add(close_btn, 0, wx.EXPAND | wx.ALL, 15)
         
         panel.SetSizer(sizer)
-        close_btn.Bind(wx.EVT_BUTTON, self.on_close)
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         self.frame.Show()
-        self.api.speak("Settings opened.")
+        self.api.speak("Settings opened. Configure voice speed and audio devices.")
+
+    def get_input_devices(self):
+        """Get list of available input devices."""
+        try:
+            devices = sd.query_devices()
+            input_devices = [d['name'] for d in devices if d['max_input_channels'] > 0]
+            return input_devices if input_devices else ["Default"]
+        except Exception as e:
+            print(f"Error querying input devices: {e}")
+            return ["Default"]
+
+    def get_output_devices(self):
+        """Get list of available output devices."""
+        try:
+            devices = sd.query_devices()
+            output_devices = [d['name'] for d in devices if d['max_output_channels'] > 0]
+            return output_devices if output_devices else ["Default"]
+        except Exception as e:
+            print(f"Error querying output devices: {e}")
+            return ["Default"]
+
+    def load_device_config(self):
+        """Load device configuration from file."""
+        if os.path.exists(self.device_config_path):
+            try:
+                with open(self.device_config_path, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading device config: {e}")
+        return {}
+
+    def save_device_config(self, input_device, output_device):
+        """Save device configuration to file."""
+        config = {
+            "input_device": input_device,
+            "output_device": output_device
+        }
+        try:
+            os.makedirs(os.path.dirname(self.device_config_path), exist_ok=True)
+            with open(self.device_config_path, "w") as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            print(f"Error saving device config: {e}")
+
+    def on_test_audio(self, event):
+        """Test audio output."""
+        self.api.speak("Testing audio. You should hear a sound.")
+        self.api.play_sound("startup")
 
     def check_updates(self, event):
         self.api.speak("Checking for updates...")
         try:
-            # Running git pull from the specific repository
-            # First, ensure we are tracking the correct remote, then pull
             subprocess.run(["git", "remote", "set-url", "origin", "https://github.com/wasilewsk/py-os.git"], check=True)
             result = subprocess.run(["git", "pull", "origin", "master"], capture_output=True, text=True, check=True)
             self.api.speak("Update completed successfully.")
@@ -53,6 +173,19 @@ class SettingsApp(BlindApp):
             self.api.speak(f"Update failed: {e.stderr}")
         except Exception as e:
             self.api.speak(f"Error during update: {e}")
+
+    def on_close(self, event=None):
+        """Save settings and close."""
+        if HAS_SOUNDDEVICE:
+            input_device = self.input_choice.GetStringSelection()
+            output_device = self.output_choice.GetStringSelection()
+            self.save_device_config(input_device, output_device)
+            self.api.speak(f"Settings saved. Audio devices: {input_device}, {output_device}.")
+        
+        if self.frame:
+            self.frame.Destroy()
+        self.api.sounds.play("close")
+        self.api.desktop.on_app_closed(self)
 
 class FileExplorerApp(BlindApp):
     def __init__(self, api):
