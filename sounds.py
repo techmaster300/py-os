@@ -134,10 +134,8 @@ class SoundManager:
         filter_str = self._build_notes_filter(notes)
         if filter_str:
             try:
-                # -nodisp: don't show display
-                # -autoexit: exit after playing
-                subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str], 
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str], 
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing notes: {e}")
 
@@ -160,24 +158,28 @@ class SoundManager:
             dur_sec = dur / 1000.0
             parts.append(f"sine=f={freq}:d={dur_sec}[v{i}]")
         
-        # Concat all sine waves
+        # Concat all sine waves and add a small pad
         inputs = "".join([f"[v{i}]" for i in range(len(notes))])
-        concat = f"{inputs}concat=n={len(notes)}:v=0:a=1[out]"
+        concat = f"{inputs}concat=n={len(notes)}:v=0:a=1,apad=pad_dur=0.3[out]"
         
         return ";".join(parts) + ";" + concat
 
     def _play_file(self, path):
         if os.path.exists(path):
             try:
-                subprocess.Popen(["ffplay", "-nodisp", "-autoexit", path], 
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Use forward slashes for ffmpeg and escape for filter string
+                clean_path = path.replace(os.sep, '/')
+                # Add a small amount of silence at the end to prevent truncation
+                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing file: {e}")
 
     def _play_file_sync(self, path):
         if os.path.exists(path):
             try:
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", path], 
+                clean_path = path.replace(os.sep, '/')
+                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing file sync: {e}")
