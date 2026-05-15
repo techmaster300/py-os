@@ -200,15 +200,14 @@ class FileExplorerApp(BlindApp):
         super().__init__(api)
         self.name = "File Explorer"
         self.description = "Browse your files."
-        self.help_text = "Use navigation buttons, address bar, arrow keys, or Enter to browse files and directories. Double-click or Enter to open."
-        self.docs = "File Explorer allows you to browse the host file system. Navigate directories, open text files with the Text Editor, and execute programs."
-        self.current_dir = os.getcwd() 
-        self.history = [] 
-        self.history_index = -1
-        self.forward_history = [] 
+        self.help_text = "Use Arrow keys to navigate, Enter to open, and Backspace to go up."
+        self.docs = "File Explorer allows you to browse the host file system."
+        self.current_dir = os.getcwd()
+        self.history = []
+        self.items = []
 
     def run(self):
-        self.frame = wx.Frame(None, title=f"File Explorer - {self.current_dir}", size=(600, 500))
+        self.frame = wx.Frame(None, title=f"File Explorer - {self.current_dir}", size=(700, 500))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         
@@ -216,22 +215,24 @@ class FileExplorerApp(BlindApp):
 
         # --- Navigation Toolbar ---
         nav_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.back_button = wx.Button(panel, label="< Back")
-        self.forward_button = wx.Button(panel, label="Forward >")
+        self.back_button = wx.Button(panel, label="Back")
+        self.up_button = wx.Button(panel, label="Up")
         self.address_bar = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
         self.address_bar.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.address_bar.SetForegroundColour(wx.Colour(255, 255, 255))
 
-        nav_sizer.Add(self.back_button, 0, wx.ALL, 5) 
-        nav_sizer.Add(self.forward_button, 0, wx.ALL, 5)
+        nav_sizer.Add(self.back_button, 0, wx.ALL, 5)
+        nav_sizer.Add(self.up_button, 0, wx.ALL, 5)
         nav_sizer.Add(self.address_bar, 1, wx.EXPAND | wx.ALL, 5)
         
         main_sizer.Add(nav_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
         # --- File List ---
-        self.list = wx.ListBox(panel, style=wx.LB_SINGLE)
+        self.list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.list.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.list.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.list.InsertColumn(0, "Name", width=400)
+        self.list.InsertColumn(1, "Type", width=100)
         main_sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 10)
         
         # --- Buttons ---
@@ -249,114 +250,95 @@ class FileExplorerApp(BlindApp):
         
         # Bindings
         self.back_button.Bind(wx.EVT_BUTTON, self.go_back)
-        self.forward_button.Bind(wx.EVT_BUTTON, self.go_forward)
+        self.up_button.Bind(wx.EVT_BUTTON, self.go_up)
         self.address_bar.Bind(wx.EVT_TEXT_ENTER, self.go_to_address)
-        self.list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_open)
+        self.list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
-        refresh_btn.Bind(wx.EVT_BUTTON, lambda e: self.go_to_path(self.current_dir))
+        refresh_btn.Bind(wx.EVT_BUTTON, lambda e: self.refresh_files())
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         
+        self.refresh_files()
         self.frame.Show()
         self.api.speak("File Explorer opened.")
         self.list.SetFocus()
 
+    def refresh_files(self):
+        self.list.DeleteAllItems()
+        self.items = []
+        try:
+            raw_items = os.listdir(self.current_dir)
+            # Sort: folders first, then files
+            raw_items.sort(key=lambda x: (not os.path.isdir(os.path.join(self.current_dir, x)), x.lower()))
+            
+            for i, name in enumerate(raw_items):
+                full_path = os.path.join(self.current_dir, name)
+                is_dir = os.path.isdir(full_path)
+                item_type = "Folder" if is_dir else "File"
+                
+                self.list.InsertItem(i, name)
+                self.list.SetItem(i, 1, item_type)
+                self.items.append((name, is_dir))
+            
+            self.address_bar.SetValue(self.current_dir)
+            self.frame.SetTitle(f"File Explorer - {self.current_dir}")
+            self.back_button.Enable(len(self.history) > 0)
+        except Exception as e:
+            self.api.speak(f"Error: {e}")
+
     def go_to_path(self, path):
-        path = os.path.abspath(path)
-        if not os.path.isdir(path):
-            self.api.speak(f"Path not found: {path}")
-            return
-        if self.current_dir != path:
+        if os.path.isdir(path):
             self.history.append(self.current_dir)
-            self.forward_history = []
-            self.history_index = len(self.history) - 1
-            if len(self.history) > 50: self.history.pop(0)
-        self.current_dir = path
-        self.refresh_files()
-        self.address_bar.SetValue(self.current_dir)
-        self.update_navigation_buttons()
-        self.api.speak(f"Navigated to {os.path.basename(path)}")
+            self.current_dir = os.path.abspath(path)
+            self.refresh_files()
+            if self.items:
+                self.list.SetItemState(0, wx.LIST_STATE_SELECTED | wx.LIST_STATE_FOCUSED, wx.LIST_STATE_SELECTED | wx.LIST_STATE_FOCUSED)
+            self.api.speak(f"Entered {os.path.basename(self.current_dir) or self.current_dir}")
 
     def go_back(self, event):
-        if self.history_index >= 0 and len(self.history) > 0:
-            if self.current_dir and self.current_dir != self.history[self.history_index]:
-                self.forward_history.append(self.current_dir)
-                if len(self.forward_history) > 50: self.forward_history.pop(0)
-            self.current_dir = self.history[self.history_index]
-            self.history_index -= 1
+        if self.history:
+            self.current_dir = self.history.pop()
             self.refresh_files()
-            self.address_bar.SetValue(self.current_dir)
-            self.api.speak("Going back")
-            self.update_navigation_buttons()
-        else:
-            self.api.speak("Cannot go back further.")
-            
-    def go_forward(self, event):
-        if self.history_index + 1 < len(self.history):
-            self.history_index += 1
-            self.current_dir = self.history[self.history_index]
-            self.refresh_files()
-            self.address_bar.SetValue(self.current_dir)
-            self.api.speak("Going forward")
-            self.update_navigation_buttons()
-        else:
-            self.api.speak("Cannot go forward.")
+            self.api.speak(f"Back to {os.path.basename(self.current_dir) or self.current_dir}")
+
+    def go_up(self, event):
+        parent = os.path.dirname(self.current_dir)
+        if parent != self.current_dir:
+            self.go_to_path(parent)
 
     def go_to_address(self, event):
-        new_path = self.address_bar.GetValue()
-        self.go_to_path(new_path)
+        path = self.address_bar.GetValue()
+        if os.path.isdir(path):
+            self.go_to_path(path)
+        else:
+            self.api.speak("Invalid path.")
 
-    def update_navigation_buttons(self):
-        self.back_button.Enable(self.history_index >= 0)
-        self.forward_button.Enable(self.history_index + 1 < len(self.history))
-
-    def refresh_files(self):
-        try:
-            items = os.listdir(self.current_dir)
-            items.sort(key=lambda x: (not os.path.isdir(os.path.join(self.current_dir, x)), x.lower()))
-            display_items = []
-            for item in items:
-                full_path = os.path.join(self.current_dir, item)
-                display_items.append(f"[D] {item}" if os.path.isdir(full_path) else item)
-            self.list.Set(display_items)
-            self.frame.SetTitle(f"File Explorer - {self.current_dir}")
-        except OSError as e:
-            self.api.speak(f"Error accessing directory: {e}")
-            self.list.Set(["Error loading directory"])
-            self.current_dir = os.path.expanduser("~")
-            self.refresh_files()
-
-    def on_open(self, event):
-        selected_item = self.list.GetStringSelection()
-        if not selected_item: return
-        item_name = selected_item[4:] if selected_item.startswith("[D] ") else selected_item
-        full_path = os.path.join(self.current_dir, item_name)
-        if os.path.isdir(full_path):
+    def on_item_activated(self, event):
+        index = event.GetIndex()
+        name, is_dir = self.items[index]
+        full_path = os.path.join(self.current_dir, name)
+        
+        if is_dir:
             self.go_to_path(full_path)
-        elif os.path.isfile(full_path):
-            self.api.speak(f"Opening file: {item_name}")
-            if item_name.lower().endswith(".txt"):
-                try:
-                    self.api.launch_app("TextEditorApp", file_path=full_path) 
-                except Exception as e:
-                    self.api.speak(f"Error: {e}")
-            elif os.access(full_path, os.X_OK):
+        else:
+            self.api.speak(f"Opening {name}")
+            if name.lower().endswith(".txt"):
+                self.api.launch_app("TextEditorApp", file_path=full_path)
+            else:
                 try:
                     if os.name == 'nt': os.startfile(full_path)
-                    else: subprocess.Popen([full_path]) 
-                    self.api.speak(f"Executed {item_name}.")
+                    else: subprocess.Popen(['xdg-open', full_path])
                 except Exception as e:
-                    self.api.speak(f"Could not execute: {e}")
-            else:
-                self.api.speak(f"Selected file: {item_name}")
+                    self.api.speak(f"Could not open file: {e}")
 
     def on_key_down(self, event):
-        key_code = event.GetKeyCode()
-        if key_code == wx.WXK_RETURN: self.on_open(None)
-        elif key_code == wx.WXK_BACK:
-            parent_dir = os.path.dirname(self.current_dir)
-            if parent_dir != self.current_dir: self.go_to_path(parent_dir)
-        event.Skip()
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_BACK:
+            self.go_up(None)
+        elif keycode == wx.WXK_LEFT and event.AltDown():
+            self.go_back(None)
+        else:
+            event.Skip()
 
     def on_close(self, event=None):
         if self.frame: self.frame.Destroy()
@@ -408,6 +390,8 @@ class CalculatorApp(BlindApp):
         expr = self.input_ctrl.GetValue()
         self.input_ctrl.Clear()
         try:
+            # Note: eval is dangerous in a real OS, but for a simulator it's okay for now.
+            # Using a safe dict for eval.
             result = eval(expr, {"__builtins__": None}, {})
             msg = f"Result: {result}"
         except Exception:

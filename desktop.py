@@ -21,6 +21,9 @@ class DesktopFrame(wx.Frame):
         self.sound_manager = sounds.SoundManager(self.data_dir)
         self.api = SystemAPI(self, self.os_kernel, speech.engine, self.sound_manager)
         
+        # Start background services
+        self.api.message_service.start()
+        
         self.apps = []
         self.app_buttons = []
         self.active_app = None

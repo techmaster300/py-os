@@ -4,6 +4,8 @@ import os
 import subprocess # For executing files
 import importlib # Import importlib for dynamic module loading
 
+from message_service import MessageService
+
 class BlindApp:
     """Base class for all BlindOS applications."""
     def __init__(self, api):
@@ -27,7 +29,7 @@ class BlindApp:
 
     def speak(self, text, interrupt=True):
         """Helper to speak text via system engine."""
-        selfB.api.engine.speak(text, interrupt)
+        self.api.engine.speak(text, interrupt)
 
 class SystemAPI:
     """Bridge between apps and the OS core."""
@@ -36,6 +38,7 @@ class SystemAPI:
         self.kernel = kernel
         self.engine = engine
         self.sounds = sounds
+        self.message_service = MessageService(self)
         self.data_dir = os.path.join(os.path.expanduser("~"), ".py-os")
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
