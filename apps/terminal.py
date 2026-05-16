@@ -6,7 +6,7 @@ class TerminalApp(BlindApp):
         super().__init__(api)
         self.name = "Terminal"
         self.description = "Command-line interface to the system kernel."
-        self.help_text = "Type OS commands like 'list', 'create', or 'where' and press Enter."
+        self.help_text = "Type OS commands like 'list', 'create', 'shutdown', 'reboot', or 'winshell' and press Enter."
         self.docs = "Terminal provides direct access to the Virtual OS Kernel. Use 'help' to see all commands."
 
     def run(self):
@@ -27,14 +27,23 @@ class TerminalApp(BlindApp):
         self.panel.SetSizer(sizer)
         self.input_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_enter)
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
+        
+        # Register callback for shell output
+        self.api.get_vfs().output_callback = lambda text: wx.CallAfter(self.shell_log, text)
+        
         self.frame.Show()
         self.log("PyOS Terminal started. Type 'help' for commands.")
         self.api.speak("Terminal opened.")
         self.input_ctrl.SetFocus()
 
     def log(self, text):
-        self.output_text.AppendText(text + "\n")
-        self.output_text.ShowPosition(self.output_text.GetLastPosition())
+        if text:
+            self.output_text.AppendText(text + "\n")
+            self.output_text.ShowPosition(self.output_text.GetLastPosition())
+
+    def shell_log(self, text):
+        self.log(text)
+        self.api.speak(text)
 
     def on_enter(self, event):
         cmd = self.input_ctrl.GetValue().strip()
@@ -43,7 +52,13 @@ class TerminalApp(BlindApp):
             self.on_close()
             return
         kernel = self.api.get_vfs()
-        response = kernel.execute(cmd)
         self.log(f"> {cmd}")
-        self.log(response)
-        self.api.speak(response)
+        response = kernel.execute(cmd)
+        if response:
+            self.log(response)
+            self.api.speak(response)
+
+    def on_close(self, event=None):
+        # Clear callback on close
+        self.api.get_vfs().output_callback = None
+        super().on_close(event)
