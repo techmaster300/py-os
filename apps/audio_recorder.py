@@ -88,7 +88,7 @@ class AudioRecorderApp(BlindApp):
         files_label.SetForegroundColour(wx.Colour(255, 255, 255))
         sizer.Add(files_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         file_row = wx.BoxSizer(wx.HORIZONTAL)
-        self.path_input = wx.TextCtrl(panel)
+        self.path_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
         self.path_input.Bind(wx.EVT_TEXT_ENTER, self.on_load_path)
         browse_btn = wx.Button(panel, label="Browse...")
         browse_btn.Bind(wx.EVT_BUTTON, self.on_browse_file)
