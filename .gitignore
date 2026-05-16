@@ -24,3 +24,5 @@ venv/
 
 # Other common ignores
 *.zip
+# Local status scratchpad
+PILessstatus.txt

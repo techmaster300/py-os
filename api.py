@@ -80,39 +80,43 @@ class SystemAPI:
         Passes keyword arguments to the app's constructor or run method.
         """
         try:
-            # Attempt to import the app class dynamically
-            # This is a basic lookup; a more robust system might use an app registry.
             app_class = None
-            # Common module patterns to search for the app class
-            possible_module_paths = [
-                f"apps.{app_name.lower()}", # e.g., apps.text_editor
-                f"apps.system_apps.{app_name}", # e.g., apps.system_apps.TextEditorApp
-                f"apps.{app_name}" # e.g., apps.text_editor_app
-            ]
-            
-            for module_path in possible_module_paths:
-                try:
-                    # Use importlib.import_module for cleaner dynamic imports
-                    module = importlib.import_module(module_path)
-                    # Try to get the class with the exact name (e.g., TextEditorApp)
-                    app_class = getattr(module, app_name, None)
-                    if app_class:
-                        break # Found the class
-                except ImportError:
-                    continue # Module not found, try next path
-                except AttributeError:
-                    continue # Class not found in this module, try next path
+            # Prefer loaded desktop app classes for reliable launches.
+            for loaded_app in getattr(self.desktop, "apps", []):
+                if loaded_app.__class__.__name__ == app_name:
+                    app_class = loaded_app.__class__
+                    break
+
+            # Fallback dynamic imports if not found in loaded apps.
+            if not app_class:
+                possible_module_paths = [
+                    f"apps.{app_name.lower()}",
+                    "apps.system_apps",
+                    "apps.audio_recorder",
+                    "apps.sound_settings",
+                ]
+                for module_path in possible_module_paths:
+                    try:
+                        module = importlib.import_module(module_path)
+                        app_class = getattr(module, app_name, None)
+                        if app_class:
+                            break
+                    except ImportError:
+                        continue
+                    except AttributeError:
+                        continue
 
             if not app_class:
                 self.speak(f"Application '{app_name}' not found or could not be loaded.")
                 return
 
-            # Instantiate the app and run it.
-            # Pass 'self' (SystemAPI) for the app to access core functionalities.
-            # Pass any additional keyword arguments (e.g., file_path).
-            instance = app_class(self, **kwargs)
-            instance.run()
-            self.speak(f"Launched {app_name}.")
+            # Instantiate with API object, and pass launch kwargs to run().
+            instance = app_class(self)
+            if kwargs:
+                instance.run(**kwargs)
+            else:
+                instance.run()
+            self.speak(f"Launched {app_name}.", interrupt=False)
 
         except Exception as e:
             self.speak(f"Failed to launch {app_name}: {e}")

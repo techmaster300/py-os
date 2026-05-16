@@ -3,6 +3,15 @@ import threading
 import json
 import os
 import time
+import numpy as np
+import soundfile as sf
+import audio_devices
+
+try:
+    import sounddevice as sd
+    HAS_SOUNDDEVICE = True
+except ImportError:
+    HAS_SOUNDDEVICE = False
 
 class SoundManager:
     def __init__(self, data_dir):
@@ -46,6 +55,7 @@ class SoundManager:
         self.themes.update(custom_themes_data)
 
         self.current_theme = self.load_theme_name()
+        self._audio_cache = {}
 
     def _load_all_custom_themes(self):
         """Loads all custom themes from the theme directory."""
@@ -131,23 +141,13 @@ class SoundManager:
 
     def _play_notes(self, notes):
         """Play a sequence of notes using ffplay and lavfi."""
-        filter_str = self._build_notes_filter(notes)
-        if filter_str:
-            try:
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str], 
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception as e:
-                print(f"Error playing notes: {e}")
+        # Use ffplay for tones for reliability across devices.
+        self._play_notes_ffplay(notes)
 
     def _play_notes_sync(self, notes):
         """Play notes synchronously."""
-        filter_str = self._build_notes_filter(notes)
-        if filter_str:
-            try:
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str], 
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception as e:
-                print(f"Error playing notes sync: {e}")
+        # Use ffplay for tones for reliability across devices.
+        self._play_notes_ffplay(notes)
 
     def _build_notes_filter(self, notes):
         """Builds a lavfi filter string for a sequence of sine waves."""
@@ -166,6 +166,8 @@ class SoundManager:
 
     def _play_file(self, path):
         if os.path.exists(path):
+            if self._play_file_with_sounddevice(path):
+                return
             try:
                 # Use forward slashes for ffmpeg and escape for filter string
                 clean_path = path.replace(os.sep, '/')
@@ -177,12 +179,79 @@ class SoundManager:
 
     def _play_file_sync(self, path):
         if os.path.exists(path):
+            if self._play_file_with_sounddevice(path):
+                return
             try:
                 clean_path = path.replace(os.sep, '/')
                 subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing file sync: {e}")
+
+    def _selected_output_device_index(self):
+        config = audio_devices.load_device_config(self.data_dir)
+        outputs = audio_devices.list_output_devices()
+        return audio_devices.resolve_selected_index(
+            outputs, config, "output_device_index", "output_device"
+        )
+
+    def _play_notes_with_sounddevice(self, notes):
+        if not HAS_SOUNDDEVICE or not notes:
+            return False
+        try:
+            sample_rate = 44100
+            parts = []
+            for freq, dur in notes:
+                duration_seconds = max(dur, 1) / 1000.0
+                t = np.linspace(0, duration_seconds, int(sample_rate * duration_seconds), endpoint=False, dtype=np.float32)
+                wave = 0.20 * np.sin(2 * np.pi * float(freq) * t)
+                parts.append(wave)
+            audio = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
+            if audio.size == 0:
+                return False
+            device_index = self._selected_output_device_index()
+            sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            return True
+        except Exception as e:
+            print(f"Sounddevice notes playback failed, falling back to ffplay: {e}")
+            return False
+
+    def _play_file_with_sounddevice(self, path):
+        if not HAS_SOUNDDEVICE:
+            return False
+        try:
+            audio, sample_rate = self._get_cached_audio(path)
+            if isinstance(audio, np.ndarray) and audio.size == 0:
+                return False
+            device_index = self._selected_output_device_index()
+            sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            return True
+        except Exception as e:
+            print(f"Sounddevice file playback failed, falling back to ffplay: {e}")
+            return False
+
+    def _get_cached_audio(self, path):
+        abs_path = os.path.abspath(path)
+        mtime = os.path.getmtime(abs_path)
+        cached = self._audio_cache.get(abs_path)
+        if cached and cached.get("mtime") == mtime:
+            return cached["audio"], cached["rate"]
+        audio, sample_rate = sf.read(abs_path, dtype="float32", always_2d=False)
+        self._audio_cache[abs_path] = {
+            "mtime": mtime,
+            "audio": audio,
+            "rate": sample_rate,
+        }
+        return audio, sample_rate
+
+    def _play_notes_ffplay(self, notes):
+        filter_str = self._build_notes_filter(notes)
+        if filter_str:
+            try:
+                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"Error playing notes: {e}")
 
     def get_available_themes(self):
         return list(self.themes.keys())

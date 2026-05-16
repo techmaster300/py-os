@@ -1,155 +1,243 @@
 import wx
-import json
 import os
 from api import BlindApp
-
-class SoundSettingsApp(BlindApp):
-    def __init__(self, api):
-        super().__init__(api)
-        self.name = "Sound Themes"
-        self.description = "Change the system sound effects."
-        self.help_text = "Use arrow keys to preview themes, and Enter to apply."
-        self.docs = "Sound Themes allows you to change the auditory style of PyOS. Available: Modern, Retro, Classic."
-
-    def run(self):
-        self.frame = wx.Frame(None, title="Sound Themes", size=(400, 300))
-        panel = wx.Panel(self.frame)
-        panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        label = wx.StaticText(panel, label="Select Sound Theme:")
-        label.SetForegroundColour(wx.Colour(255, 255, 255))
-        sizer.Add(label, 0, wx.ALL | wx.CENTER, 20)
-        themes = self.api.sounds.get_available_themes()
-        self.list = wx.ListBox(panel, choices=themes, style=wx.LB_SINGLE)
-        self.list.SetBackgroundColour(wx.Colour(20, 20, 20))
-        self.list.SetForegroundColour(wx.Colour(255, 255, 255))
-        current = self.api.sounds.current_theme
-        if current in themes: self.list.SetSelection(themes.index(current))
-        sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 10)
-        select_btn = wx.Button(panel, label="Apply and Close")
-        sizer.Add(select_btn, 0, wx.ALL | wx.CENTER, 20)
-        panel.SetSizer(sizer)
-        self.list.Bind(wx.EVT_LISTBOX, self.on_preview)
-        select_btn.Bind(wx.EVT_BUTTON, self.on_apply)
-        self.frame.Bind(wx.EVT_CLOSE, self.on_close)
-        self.frame.Show()
-        self.api.speak(f"Sound Themes opened. Current: {current}.")
-        self.list.SetFocus()
-
-    def on_preview(self, event):
-        theme_name = self.list.GetStringSelection()
-        self.api.sounds.current_theme = theme_name
-        self.api.play_sound("startup")
-        self.api.speak(theme_name)
-
-    def on_apply(self, event):
-        theme_name = self.list.GetStringSelection()
-        self.api.sounds.save_theme_name(theme_name)
-        self.api.speak(f"Theme {theme_name} applied.")
-        self.on_close()
 
 class ThemeCreatorApp(BlindApp):
     def __init__(self, api):
         super().__init__(api)
         self.name = "Theme Creator"
         self.description = "Create your own sound theme."
-        # Updated docs to reflect file support and new event types
         self.docs = "Theme Creator allows you to define custom tones or sound file paths for system events like startup, navigation, alerts, launch, close, alarms, and timers." 
+        self.frame = None
+        self.label = None
+        self.theme_name_input = None
+        self.mode_choice = None
+        self.freq_input = None
+        self.duration_input = None
+        self.file_path_input = None
+        self.browse_btn = None
+        self.btn = None
+        self.step = "theme_name"
+        self.current_event_index = 0
+        self.events = ["startup", "nav", "alert", "launch", "close", "alarm", "timer"]
+        self.new_theme = {}
+        self.theme_name = ""
+        self.current_event = ""
+        self.sound_choice_mode = "tones"
 
-        self.frame = wx.Frame(None, title="Theme Creator", size=(400, 400))
+    def run(self):
+        self.step = "theme_name"
+        self.current_event_index = 0
+        self.new_theme = {}
+        self.theme_name = ""
+        self.current_event = ""
+        self.sound_choice_mode = "tones"
+
+        self.frame = wx.Frame(None, title="Theme Creator", size=(520, 430))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
+
         self.label = wx.StaticText(panel, label="Enter name for new theme:")
         self.label.SetForegroundColour(wx.Colour(255, 255, 255))
         self.label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(self.label, 0, wx.ALL | wx.CENTER, 10)
-        
-        # Initial input for theme name
-        self.input_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.input_ctrl.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.ALL, 10)
-        
+
+        self.theme_name_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.theme_name_input.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sizer.Add(self.theme_name_input, 0, wx.EXPAND | wx.ALL, 10)
+
+        self.mode_choice = wx.Choice(panel, choices=["Tones", "Audio File"])
+        self.mode_choice.SetSelection(0)
+        self.mode_choice.Hide()
+        sizer.Add(self.mode_choice, 0, wx.EXPAND | wx.ALL, 10)
+
+        self.freq_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.freq_input.SetHint("Frequencies, e.g. 440, 660, 0")
+        self.freq_input.Hide()
+        sizer.Add(self.freq_input, 0, wx.EXPAND | wx.ALL, 8)
+
+        self.duration_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.duration_input.SetHint("Durations ms, e.g. 200, 300, 500")
+        self.duration_input.Hide()
+        sizer.Add(self.duration_input, 0, wx.EXPAND | wx.ALL, 8)
+
+        file_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.file_path_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.file_path_input.SetHint("Type file path or click Browse")
+        self.file_path_input.Hide()
+        file_row.Add(self.file_path_input, 1, wx.EXPAND | wx.RIGHT, 8)
+        self.browse_btn = wx.Button(panel, label="Browse...")
+        self.browse_btn.Hide()
+        file_row.Add(self.browse_btn, 0)
+        sizer.Add(file_row, 0, wx.EXPAND | wx.ALL, 8)
+
         self.btn = wx.Button(panel, label="Next")
         sizer.Add(self.btn, 0, wx.ALL | wx.CENTER, 10)
-        
         panel.SetSizer(sizer)
-        
-        # State variables for theme creation flow
-        self.step = 0
-        self.current_event_index = 0 # To track which sound event we are configuring
-        # Added "alarm" and "timer" to the events list
-        self.events = ["startup", "nav", "alert", "launch", "close", "alarm", "timer"] 
-        self.new_theme = {} # Will store tones (list of lists) or file paths (string)
-        self.theme_name = ""
-        self.current_event = ""
-        self.sound_choice_mode = "" # To store 'tones' or 'file'
 
         self.btn.Bind(wx.EVT_BUTTON, self.on_next)
-        self.input_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_next)
+        self.theme_name_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
+        self.freq_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
+        self.duration_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
+        self.file_path_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
+        self.browse_btn.Bind(wx.EVT_BUTTON, self.on_browse_file)
+        self.mode_choice.Bind(wx.EVT_CHOICE, self.on_mode_changed)
+        self.frame.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
-        
+
         self.frame.Show()
         self.api.speak("Theme Creator opened. Enter a name for your theme.")
-        self.input_ctrl.SetFocus()
+        self.set_step_ui("theme_name")
+
+    def on_key_press(self, event):
+        keycode = event.GetKeyCode()
+        if keycode in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            self.on_next()
+            return
+        event.Skip()
+
+    def on_mode_changed(self, event):
+        selected = self.mode_choice.GetStringSelection().lower()
+        self.sound_choice_mode = "tones" if selected == "tones" else "file"
+        if self.step == "event":
+            self.update_event_inputs()
+
+    def update_event_inputs(self):
+        if self.sound_choice_mode == "tones":
+            self.freq_input.Show()
+            self.duration_input.Show()
+            self.file_path_input.Hide()
+            self.browse_btn.Hide()
+            if not self.freq_input.HasFocus() and not self.duration_input.HasFocus():
+                self.freq_input.SetFocus()
+            self.api.speak("Tone mode. Enter frequencies then durations.")
+        else:
+            self.freq_input.Hide()
+            self.duration_input.Hide()
+            self.file_path_input.Show()
+            self.browse_btn.Show()
+            if not self.file_path_input.HasFocus():
+                self.file_path_input.SetFocus()
+            self.api.speak("File mode. Type a path or browse.")
+        self.frame.Layout()
+
+    def set_step_ui(self, step):
+        self.step = step
+        self.theme_name_input.Hide()
+        self.mode_choice.Hide()
+        self.freq_input.Hide()
+        self.duration_input.Hide()
+        self.file_path_input.Hide()
+        self.browse_btn.Hide()
+
+        if step == "theme_name":
+            self.label.SetLabel("Enter name for new theme:")
+            self.theme_name_input.Show()
+            self.theme_name_input.SetFocus()
+            self.api.speak("Enter a name for your theme, then press Next.")
+        elif step == "event":
+            self.label.SetLabel(f"{self.current_event.capitalize()}: choose source and enter values.")
+            self.mode_choice.Show()
+            self.mode_choice.SetFocus()
+            self.update_event_inputs()
+
+        self.frame.Layout()
 
     def on_next(self, event=None):
-        val = self.input_ctrl.GetValue().strip()
-        self.input_ctrl.Clear()
-        if not val: return
-
-        if self.step == 0: # Theme name input
+        if self.step == "theme_name":
+            val = self.theme_name_input.GetValue().strip()
+            if not val:
+                self.api.speak("Theme name is required.")
+                self.theme_name_input.SetFocus()
+                return
+            self.theme_name_input.Clear()
             self.theme_name = val
             self.current_event = self.events[self.current_event_index]
-            self.label.SetLabel(f"For the {self.current_event.capitalize()} sound, choose: tones or file?")
-            self.api.speak(f"For the {self.current_event} sound, do you want to use tones or a file? Type 'tones' or 'file'.")
-            self.step = 1 # Next step is to choose sound type
+            self.set_step_ui("event")
+            return
 
-        elif self.step == 1: # Choose sound type (tones/file) for current event
-            self.sound_choice_mode = val.lower()
+        if self.step == "event":
+            selected = self.mode_choice.GetStringSelection().lower() or "tones"
+            self.sound_choice_mode = "tones" if selected == "tones" else "file"
             if self.sound_choice_mode == "tones":
-                self.label.SetLabel(f"Enter frequency for {self.current_event.capitalize()} beep:")
-                self.api.speak(f"Enter frequency for {self.current_event} beep (e.g., 500).")
-                self.step = 2 # Next step is to input tone frequency
-            elif self.sound_choice_mode == "file":
-                # Open file dialog for audio files
-                wildcard = "Audio files (*.wav;*.mp3;*.ogg;*.flac)|*.wav;*.mp3;*.ogg;*.flac|WAV files (*.wav)|*.wav|MP3 files (*.mp3)|*.mp3|OGG files (*.ogg)|*.ogg|FLAC files (*.flac)|*.flac"
-                dlg = wx.FileDialog(self.frame, "Choose an audio file", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-                if dlg.ShowModal() == wx.ID_OK:
-                    file_path = dlg.GetPath()
-                    self.new_theme[self.current_event] = file_path
-                    self.api.speak(f"{self.current_event.capitalize()} sound set to file: {file_path}")
+                try:
+                    tones = self.parse_tone_input(
+                        self.freq_input.GetValue().strip(),
+                        self.duration_input.GetValue().strip()
+                    )
+                    self.new_theme[self.current_event] = tones
+                    self.freq_input.Clear()
+                    self.duration_input.Clear()
+                    self.api.speak(f"{self.current_event.capitalize()} tone set.")
                     self.advance_to_next_event()
-                else:
-                    self.api.speak("File selection cancelled. Please choose 'tones' or 'file'.")
-                    # Stay on step 1 to re-prompt for choice
-            else:
-                self.api.speak("Invalid choice. Please type 'tones' or 'file'.")
-                # Stay on step 1 to re-prompt for choice
+                except ValueError as e:
+                    self.api.speak(f"Invalid tone input: {e}")
+                    self.freq_input.SetFocus()
+                return
+            path = self.file_path_input.GetValue().strip()
+            if not path:
+                self.api.speak("File path is required, or use Browse.")
+                self.file_path_input.SetFocus()
+                return
+            if not os.path.exists(path):
+                self.api.speak("File path not found. Please enter a valid audio file path.")
+                self.file_path_input.SetFocus()
+                return
+            self.new_theme[self.current_event] = path
+            self.file_path_input.Clear()
+            self.api.speak(f"{self.current_event.capitalize()} sound set to file.")
+            self.advance_to_next_event()
 
-        elif self.step == 2: # Input for tone frequency
+    def parse_int_list(self, raw_text, field_name):
+        parts = [p.strip() for p in raw_text.split(",")]
+        if not parts or any(p == "" for p in parts):
+            raise ValueError(f"{field_name} must be comma-separated values")
+        values = []
+        for part in parts:
             try:
-                freq = int(val)
-                # Default duration for tones, could be made configurable later
-                duration = 300 if self.current_event == "startup" else (50 if self.current_event == "nav" else 500)
-                self.new_theme[self.current_event] = [(freq, duration)]
-                self.api.speak(f"{self.current_event.capitalize()} tone set.")
-                self.advance_to_next_event()
+                values.append(int(part))
             except ValueError:
-                self.api.speak("Invalid frequency. Please enter a number.")
-                # Stay on step 2 to re-prompt for frequency
+                raise ValueError(f"{field_name} must contain only whole numbers")
+        return values
+
+    def validate_tone_safety(self, freq, duration):
+        if freq >= 8000 and duration > 120:
+            raise ValueError("frequencies 8000 Hz or higher must be 120 ms or less")
+        if freq >= 4000 and duration > 300:
+            raise ValueError("frequencies 4000 Hz or higher must be 300 ms or less")
+
+    def parse_tone_input(self, freq_text, duration_text):
+        freqs = self.parse_int_list(freq_text, "Frequencies")
+        durs = self.parse_int_list(duration_text, "Durations")
+        if len(freqs) != len(durs):
+            raise ValueError("frequencies and durations must have the same number of items")
+
+        tones = []
+        for freq, duration in zip(freqs, durs):
+            if freq < 0:
+                raise ValueError("frequency cannot be negative; use 0 for silence")
+            if duration <= 0:
+                raise ValueError("duration must be greater than zero")
+            if freq > 0:
+                self.validate_tone_safety(freq, duration)
+            tones.append((freq, duration))
+        return tones
+
+    def on_browse_file(self, event):
+        wildcard = "Audio files (*.wav;*.mp3;*.ogg;*.flac)|*.wav;*.mp3;*.ogg;*.flac|WAV files (*.wav)|*.wav|MP3 files (*.mp3)|*.mp3|OGG files (*.ogg)|*.ogg|FLAC files (*.flac)|*.flac"
+        dlg = wx.FileDialog(self.frame, "Choose an audio file", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.file_path_input.SetValue(dlg.GetPath())
+            self.api.speak("File selected.")
+        dlg.Destroy()
 
     def advance_to_next_event(self):
         self.current_event_index += 1
         if self.current_event_index < len(self.events):
             self.current_event = self.events[self.current_event_index]
-            self.step = 1 # Reset to choose sound type for the next event
-            prompt_message = f"For the {self.current_event.capitalize()} sound, do you want to use tones or a file? (tones/file):"
-            self.api.speak(prompt_message)
-            self.label.SetLabel(f"Choose sound type for {self.current_event.capitalize()}: tones or file?")
+            self.set_step_ui("event")
         else:
-            # All events processed, finalize theme
             self.finalize_theme()
 
     def finalize_theme(self):
@@ -174,7 +262,7 @@ class ThemeCreatorApp(BlindApp):
         else:
             self.api.speak("Theme creation failed. Please ensure all required inputs were provided.")
             
-        self.frame.Destroy() # Close the frame after completion or failure
+        self.on_close()
 
     def on_close(self, event=None):
         """Cleanup and return focus to desktop."""

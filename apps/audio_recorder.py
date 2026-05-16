@@ -1,127 +1,137 @@
-import wx
 import os
+import threading
+from datetime import datetime
+
+import numpy as np
 import sounddevice as sd
 import soundfile as sf
-import numpy as np
-from datetime import datetime
+import wx
+
+import audio_devices
 from api import BlindApp
 
+
 class AudioRecorderApp(BlindApp):
-    """A fully-featured audio recording application for py-os."""
-    
+    """Combined recorder and audio player app."""
+
     def __init__(self, api):
         super().__init__(api)
-        self.name = "Audio Recorder"
-        self.description = "Record and save audio files."
-        self.help_text = "Press Space to start/stop recording, or use the buttons. Enter a custom filename or use auto-generated names."
-        self.docs = "Audio Recorder allows you to record audio from your microphone and save it as WAV files. Press Space for quick recording toggle."
-        
-        # Recording state
-        self.is_recording = False
-        self.recording_data = []
+        self.name = "Media Studio"
+        self.description = "Record and play audio files."
+        self.help_text = "Use Start/Stop to record, Save to store clips, and Play/Pause/Stop to listen."
+        self.docs = "Media Studio records from your selected microphone and plays recordings or chosen audio files."
         self.sample_rate = 44100
-        self.recording_thread = None
         self.recordings_dir = os.path.join(self.api.get_data_path(""), "recordings")
-        
-        # Ensure recordings directory exists
-        if not os.path.exists(self.recordings_dir):
-            os.makedirs(self.recordings_dir)
-        
+        os.makedirs(self.recordings_dir, exist_ok=True)
+
         self.frame = None
         self.filename_input = None
-        self.start_btn = None
-        self.stop_btn = None
-        self.save_btn = None
         self.duration_label = None
         self.status_label = None
         self.recordings_list = None
-        self.recording_time = 0
+        self.path_input = None
 
-    def run(self):
-        """Launch the audio recorder UI."""
-        self.frame = wx.Frame(None, title="Audio Recorder", size=(600, 500))
+        self.is_recording = False
+        self.recording_data = []
+        self.recording_time = 0
+        self.recording_thread = None
+
+        self.current_playback_path = None
+        self.is_playing = False
+        self.is_paused = False
+        self.playback_position = 0
+        self.playback_data = None
+        self.playback_rate = None
+        self.playback_channels = None
+        self.playback_lock = threading.Lock()
+
+    def run(self, file_path=None):
+        self.frame = wx.Frame(None, title="Media Studio", size=(700, 560))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Title
-        title = wx.StaticText(panel, label="Audio Recorder")
+
+        title = wx.StaticText(panel, label="Media Studio")
         title.SetForegroundColour(wx.Colour(255, 255, 255))
         title.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
-        
-        # Filename input
-        filename_label = wx.StaticText(panel, label="Filename (leave empty for auto-generated):")
+        sizer.Add(title, 0, wx.ALL | wx.CENTER, 12)
+
+        filename_label = wx.StaticText(panel, label="Recording filename (optional):")
         filename_label.SetForegroundColour(wx.Colour(255, 255, 255))
-        sizer.Add(filename_label, 0, wx.ALL, 10)
-        
+        sizer.Add(filename_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.filename_input = wx.TextCtrl(panel)
-        self.filename_input.SetBackgroundColour(wx.Colour(30, 30, 30))
-        self.filename_input.SetForegroundColour(wx.Colour(200, 200, 200))
         sizer.Add(self.filename_input, 0, wx.EXPAND | wx.ALL, 10)
-        
-        # Duration display
+
         self.duration_label = wx.StaticText(panel, label="Duration: 0 seconds")
         self.duration_label.SetForegroundColour(wx.Colour(150, 255, 150))
-        sizer.Add(self.duration_label, 0, wx.ALL | wx.CENTER, 10)
-        
-        # Status
+        sizer.Add(self.duration_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
         self.status_label = wx.StaticText(panel, label="Status: Ready")
         self.status_label.SetForegroundColour(wx.Colour(255, 255, 100))
-        sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 10)
-        
-        # Control buttons
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
+        sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        rec_btn_row = wx.BoxSizer(wx.HORIZONTAL)
         self.start_btn = wx.Button(panel, label="Start Recording")
-        self.start_btn.SetBackgroundColour(wx.Colour(0, 100, 0))
-        self.start_btn.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.start_btn.Bind(wx.EVT_BUTTON, self.on_start_recording)
-        button_sizer.Add(self.start_btn, 1, wx.EXPAND | wx.ALL, 5)
-        
         self.stop_btn = wx.Button(panel, label="Stop Recording")
-        self.stop_btn.SetBackgroundColour(wx.Colour(100, 0, 0))
-        self.stop_btn.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.stop_btn.Bind(wx.EVT_BUTTON, self.on_stop_recording)
-        self.stop_btn.Enable(False)
-        button_sizer.Add(self.stop_btn, 1, wx.EXPAND | wx.ALL, 5)
-        
-        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 5)
-        
-        # Save button
         self.save_btn = wx.Button(panel, label="Save Recording")
-        self.save_btn.SetBackgroundColour(wx.Colour(0, 50, 100))
-        self.save_btn.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.save_btn.Bind(wx.EVT_BUTTON, self.on_save_recording)
+        self.stop_btn.Enable(False)
         self.save_btn.Enable(False)
-        sizer.Add(self.save_btn, 0, wx.EXPAND | wx.ALL, 10)
-        
-        # Recordings list
-        recordings_label = wx.StaticText(panel, label="Saved Recordings:")
-        recordings_label.SetForegroundColour(wx.Colour(255, 255, 255))
-        sizer.Add(recordings_label, 0, wx.ALL, 10)
-        
+        self.start_btn.Bind(wx.EVT_BUTTON, self.on_start_recording)
+        self.stop_btn.Bind(wx.EVT_BUTTON, self.on_stop_recording)
+        self.save_btn.Bind(wx.EVT_BUTTON, self.on_save_recording)
+        rec_btn_row.Add(self.start_btn, 1, wx.EXPAND | wx.ALL, 5)
+        rec_btn_row.Add(self.stop_btn, 1, wx.EXPAND | wx.ALL, 5)
+        rec_btn_row.Add(self.save_btn, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(rec_btn_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        files_label = wx.StaticText(panel, label="Audio file path:")
+        files_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        sizer.Add(files_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        file_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.path_input = wx.TextCtrl(panel)
+        self.path_input.Bind(wx.EVT_TEXT_ENTER, self.on_load_path)
+        browse_btn = wx.Button(panel, label="Browse...")
+        browse_btn.Bind(wx.EVT_BUTTON, self.on_browse_file)
+        load_btn = wx.Button(panel, label="Load Path")
+        load_btn.Bind(wx.EVT_BUTTON, self.on_load_path)
+        file_row.Add(self.path_input, 1, wx.EXPAND | wx.RIGHT, 8)
+        file_row.Add(browse_btn, 0, wx.RIGHT, 6)
+        file_row.Add(load_btn, 0)
+        sizer.Add(file_row, 0, wx.EXPAND | wx.ALL, 10)
+
+        playback_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.play_btn = wx.Button(panel, label="Play")
+        self.pause_btn = wx.Button(panel, label="Pause/Resume")
+        self.stop_playback_btn = wx.Button(panel, label="Stop Playback")
+        self.play_btn.Bind(wx.EVT_BUTTON, self.on_play)
+        self.pause_btn.Bind(wx.EVT_BUTTON, self.on_pause_resume)
+        self.stop_playback_btn.Bind(wx.EVT_BUTTON, self.on_stop_playback)
+        playback_row.Add(self.play_btn, 1, wx.EXPAND | wx.ALL, 5)
+        playback_row.Add(self.pause_btn, 1, wx.EXPAND | wx.ALL, 5)
+        playback_row.Add(self.stop_playback_btn, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(playback_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        list_label = wx.StaticText(panel, label="Saved recordings:")
+        list_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        sizer.Add(list_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.recordings_list = wx.ListBox(panel)
-        self.recordings_list.SetBackgroundColour(wx.Colour(20, 20, 20))
-        self.recordings_list.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.refresh_recordings_list()
+        self.recordings_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_open_selected_recording)
         sizer.Add(self.recordings_list, 1, wx.EXPAND | wx.ALL, 10)
-        
+        self.refresh_recordings_list()
+
         panel.SetSizer(sizer)
-        
-        # Keyboard bindings
         self.frame.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
-        
         self.frame.Show()
         self.api.play_sound("launch")
-        self.api.speak(f"{self.name} opened. Press Space to record or use the buttons.")
+        self.api.speak("Media Studio opened.")
+
+        if file_path:
+            self.path_input.SetValue(file_path)
+            self.load_playback_file(file_path)
 
     def on_key_press(self, event):
-        """Handle Space key for quick recording toggle."""
-        keycode = event.GetKeyCode()
-        if keycode == wx.WXK_SPACE:
+        if event.GetKeyCode() == wx.WXK_SPACE:
             if self.is_recording:
                 self.on_stop_recording()
             else:
@@ -130,104 +140,92 @@ class AudioRecorderApp(BlindApp):
             event.Skip()
 
     def on_start_recording(self, event=None):
-        """Start recording audio."""
         if self.is_recording:
             self.api.speak("Already recording.")
             return
-        
         self.is_recording = True
         self.recording_data = []
         self.recording_time = 0
-        
         self.start_btn.Enable(False)
         self.stop_btn.Enable(True)
         self.filename_input.Enable(False)
-        
         self.status_label.SetLabel("Status: Recording...")
         self.status_label.SetForegroundColour(wx.Colour(255, 0, 0))
-        
-        self.api.play_sound("launch")
-        self.api.speak("Recording started. Press Space or click Stop Recording to stop.")
-        
-        # Start recording in a separate thread
-        import threading
         self.recording_thread = threading.Thread(target=self._record_audio, daemon=True)
         self.recording_thread.start()
-        
-        # Update duration display
         self._update_duration()
+        self.api.speak("Recording started.")
 
     def _record_audio(self):
-        """Record audio in background thread."""
         try:
+            config = audio_devices.load_device_config(self.api.data_dir)
+            input_devices = audio_devices.list_input_devices()
+            selected_input_index = audio_devices.resolve_selected_index(
+                input_devices, config, "input_device_index", "input_device"
+            )
             frames = []
-            with sd.InputStream(samplerate=self.sample_rate, channels=1, callback=lambda indata, frames_count, time_info, status: frames.append(indata.copy())) as stream:
+            with sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                device=selected_input_index,
+                callback=lambda indata, frames_count, time_info, status: frames.append(indata.copy())
+            ):
                 while self.is_recording:
                     pass
-            
-            # Combine all frames
             if frames:
                 self.recording_data = np.concatenate(frames, axis=0)
-        except Exception as e:
-            print(f"Recording error: {e}")
-            self.api.speak(f"Recording error: {e}")
+        except Exception:
+            self.api.speak("Recording failed on selected mic. Trying default input.")
+            try:
+                frames = []
+                with sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=1,
+                    callback=lambda indata, frames_count, time_info, status: frames.append(indata.copy())
+                ):
+                    while self.is_recording:
+                        pass
+                if frames:
+                    self.recording_data = np.concatenate(frames, axis=0)
+            except Exception as fallback_error:
+                self.api.speak(f"Recording error: {fallback_error}")
 
     def _update_duration(self):
-        """Update recording duration display."""
         if self.is_recording:
             self.recording_time += 1
             wx.CallAfter(self.duration_label.SetLabel, f"Duration: {self.recording_time} seconds")
-            import threading
             threading.Timer(1.0, self._update_duration).start()
 
     def on_stop_recording(self, event=None):
-        """Stop recording audio."""
         if not self.is_recording:
-            self.api.speak("Not currently recording.")
+            self.api.speak("Not recording.")
             return
-        
         self.is_recording = False
-        
         self.start_btn.Enable(True)
         self.stop_btn.Enable(False)
         self.save_btn.Enable(True)
-        
-        self.status_label.SetLabel("Status: Ready to save")
+        self.status_label.SetLabel("Status: Ready to save recording")
         self.status_label.SetForegroundColour(wx.Colour(0, 255, 0))
-        
-        self.api.play_sound("close")
-        self.api.speak(f"Recording stopped. {self.recording_time} seconds recorded. Click Save Recording to save.")
+        self.api.speak(f"Recording stopped. {self.recording_time} seconds.")
 
     def on_save_recording(self, event=None):
-        """Save the recorded audio."""
         if len(self.recording_data) == 0:
             self.api.speak("No recording to save.")
             return
-        
-        # Generate filename
         filename = self.filename_input.GetValue().strip()
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"recording_{timestamp}"
-        
-        # Ensure .wav extension
+            filename = f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         if not filename.endswith(".wav"):
             filename += ".wav"
-        
         filepath = os.path.join(self.recordings_dir, filename)
-        
-        # Handle duplicate filenames
         counter = 1
-        base_path = filepath[:-4]
+        base = filepath[:-4]
         while os.path.exists(filepath):
-            filepath = f"{base_path}_{counter}.wav"
+            filepath = f"{base}_{counter}.wav"
             counter += 1
-        
         try:
             sf.write(filepath, self.recording_data, self.sample_rate)
-            self.api.speak(f"Recording saved as {os.path.basename(filepath)}")
-            
-            # Reset
+            self.api.speak(f"Saved {os.path.basename(filepath)}.")
             self.recording_data = []
             self.recording_time = 0
             self.filename_input.Clear()
@@ -236,25 +234,123 @@ class AudioRecorderApp(BlindApp):
             self.duration_label.SetLabel("Duration: 0 seconds")
             self.status_label.SetLabel("Status: Ready")
             self.status_label.SetForegroundColour(wx.Colour(255, 255, 100))
-            
             self.refresh_recordings_list()
         except Exception as e:
-            self.api.speak(f"Error saving file: {e}")
+            self.api.speak(f"Save error: {e}")
 
     def refresh_recordings_list(self):
-        """Refresh the list of saved recordings."""
         self.recordings_list.Clear()
         try:
-            recordings = [f for f in os.listdir(self.recordings_dir) if f.endswith(".wav")]
-            recordings.sort(reverse=True)
-            for recording in recordings:
-                self.recordings_list.Append(recording)
+            files = [f for f in os.listdir(self.recordings_dir) if f.lower().endswith((".wav", ".mp3", ".ogg", ".flac"))]
+            files.sort(reverse=True)
+            for name in files:
+                self.recordings_list.Append(name)
+        except Exception:
+            pass
+
+    def on_open_selected_recording(self, event=None):
+        selected = self.recordings_list.GetStringSelection()
+        if not selected:
+            self.api.speak("No recording selected.")
+            return
+        full = os.path.join(self.recordings_dir, selected)
+        self.path_input.SetValue(full)
+        self.load_playback_file(full)
+
+    def on_browse_file(self, event=None):
+        wildcard = "Audio files (*.wav;*.mp3;*.ogg;*.flac)|*.wav;*.mp3;*.ogg;*.flac"
+        dlg = wx.FileDialog(self.frame, "Choose audio file", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            self.path_input.SetValue(path)
+            self.load_playback_file(path)
+        dlg.Destroy()
+
+    def on_load_path(self, event=None):
+        self.load_playback_file(self.path_input.GetValue().strip())
+
+    def load_playback_file(self, path):
+        if not path:
+            self.api.speak("Provide a file path first.")
+            return
+        if not os.path.exists(path):
+            self.api.speak("File does not exist.")
+            return
+        try:
+            data, rate = sf.read(path, dtype="float32")
+            if data.ndim == 1:
+                data = data[:, np.newaxis]
+            with self.playback_lock:
+                self.current_playback_path = path
+                self.playback_data = data
+                self.playback_rate = rate
+                self.playback_channels = data.shape[1]
+                self.playback_position = 0
+                self.is_paused = False
+            self.api.speak(f"Loaded {os.path.basename(path)}.")
         except Exception as e:
-            print(f"Error loading recordings: {e}")
+            self.api.speak(f"Could not load audio: {e}")
+
+    def _selected_output(self):
+        config = audio_devices.load_device_config(self.api.data_dir)
+        outputs = audio_devices.list_output_devices()
+        return audio_devices.resolve_selected_index(outputs, config, "output_device_index", "output_device")
+
+    def on_play(self, event=None):
+        with self.playback_lock:
+            if self.playback_data is None:
+                self.api.speak("Load a file first.")
+                return
+            if self.is_playing and not self.is_paused:
+                self.api.speak("Already playing.")
+                return
+            segment = self.playback_data[self.playback_position :]
+            if segment.size == 0:
+                self.playback_position = 0
+                segment = self.playback_data
+            self.is_playing = True
+            self.is_paused = False
+        try:
+            sd.play(segment, samplerate=self.playback_rate, device=self._selected_output())
+            self.api.speak("Playing audio.")
+        except Exception as e:
+            self.api.speak(f"Playback error: {e}")
+
+    def on_pause_resume(self, event=None):
+        with self.playback_lock:
+            if self.playback_data is None:
+                self.api.speak("Load a file first.")
+                return
+            if not self.is_playing:
+                self.api.speak("Nothing is playing.")
+                return
+            if not self.is_paused:
+                sd.stop()
+                self.is_paused = True
+                self.api.speak("Paused.")
+            else:
+                self.is_paused = False
+                self.playback_position = 0
+        if not self.is_paused:
+            self.api.speak("Resuming from start.")
+            self.on_play()
+
+    def on_stop_playback(self, event=None):
+        with self.playback_lock:
+            if self.playback_data is None:
+                return
+            sd.stop()
+            self.playback_position = 0
+            self.is_playing = False
+            self.is_paused = False
+        self.api.speak("Playback stopped.")
 
     def on_close(self, event=None):
-        """Cleanup and close the app."""
         self.is_recording = False
+        try:
+            sd.stop()
+        except Exception:
+            pass
         if self.frame:
             self.frame.Destroy()
         self.api.play_sound("close")

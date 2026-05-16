@@ -2,9 +2,9 @@ import wx
 import os
 import datetime
 import subprocess
-import importlib
-import json
+import speech
 from api import BlindApp
+import audio_devices
 
 try:
     import sounddevice as sd
@@ -20,6 +20,8 @@ class SettingsApp(BlindApp):
         self.help_text = "Use Tab to navigate controls, and Enter to save."
         self.docs = "Settings allows you to customize the OS behavior. Voice speed can be adjusted from 50 to 400. Configure audio input and output devices."
         self.device_config_path = self.api.get_data_path("device_config.json")
+        self.input_entries = []
+        self.output_entries = []
 
     def run(self):
         self.frame = wx.Frame(None, title="Settings", size=(500, 600))
@@ -42,6 +44,23 @@ class SettingsApp(BlindApp):
         self.speed_slider = wx.Slider(panel, value=200, minValue=50, maxValue=400, style=wx.SL_HORIZONTAL)
         self.speed_slider.SetBackgroundColour(wx.Colour(40, 40, 40))
         sizer.Add(self.speed_slider, 0, wx.EXPAND | wx.ALL, 10)
+
+        # Speech Engine Section
+        speech_label = wx.StaticText(panel, label="Speech Engine:")
+        speech_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        sizer.Add(speech_label, 0, wx.ALL, 10)
+
+        self.speech_modes = [
+            ("Auto (NVDA when available)", "auto"),
+            ("NVDA", "nvda"),
+            ("SAPI", "sapi"),
+        ]
+        self.speech_choice = wx.Choice(panel, choices=[m[0] for m in self.speech_modes])
+        current_mode = getattr(self.api.engine, "get_mode", lambda: "auto")()
+        idx = next((i for i, m in enumerate(self.speech_modes) if m[1] == current_mode), 0)
+        self.speech_choice.SetSelection(idx)
+        self.speech_choice.Bind(wx.EVT_CHOICE, self.on_speech_mode_change)
+        sizer.Add(self.speech_choice, 0, wx.EXPAND | wx.ALL, 8)
         
         # Audio Devices Section
         if HAS_SOUNDDEVICE:
@@ -55,16 +74,24 @@ class SettingsApp(BlindApp):
             input_label.SetForegroundColour(wx.Colour(200, 200, 200))
             sizer.Add(input_label, 0, wx.ALL, 8)
             
-            input_devices = self.get_input_devices()
-            self.input_choice = wx.Choice(panel, choices=input_devices if input_devices else ["Default"])
+            self.input_entries = self.get_input_devices()
+            input_labels = [self._device_label(d) for d in self.input_entries] or ["Default"]
+            self.input_choice = wx.Choice(panel, choices=input_labels)
             self.input_choice.SetBackgroundColour(wx.Colour(40, 40, 40))
             self.input_choice.SetForegroundColour(wx.Colour(255, 255, 255))
             
             # Load saved input device
             config = self.load_device_config()
-            current_input = config.get("input_device", "Default")
-            if current_input in input_devices:
-                self.input_choice.SetSelection(input_devices.index(current_input))
+            selected_input_index = audio_devices.resolve_selected_index(
+                self.input_entries, config, "input_device_index", "input_device"
+            )
+            if selected_input_index is not None:
+                for i, entry in enumerate(self.input_entries):
+                    if entry["index"] == selected_input_index:
+                        self.input_choice.SetSelection(i)
+                        break
+                else:
+                    self.input_choice.SetSelection(0)
             else:
                 self.input_choice.SetSelection(0)
             
@@ -75,15 +102,23 @@ class SettingsApp(BlindApp):
             output_label.SetForegroundColour(wx.Colour(200, 200, 200))
             sizer.Add(output_label, 0, wx.ALL, 8)
             
-            output_devices = self.get_output_devices()
-            self.output_choice = wx.Choice(panel, choices=output_devices if output_devices else ["Default"])
+            self.output_entries = self.get_output_devices()
+            output_labels = [self._device_label(d) for d in self.output_entries] or ["Default"]
+            self.output_choice = wx.Choice(panel, choices=output_labels)
             self.output_choice.SetBackgroundColour(wx.Colour(40, 40, 40))
             self.output_choice.SetForegroundColour(wx.Colour(255, 255, 255))
             
             # Load saved output device
-            current_output = config.get("output_device", "Default")
-            if current_output in output_devices:
-                self.output_choice.SetSelection(output_devices.index(current_output))
+            selected_output_index = audio_devices.resolve_selected_index(
+                self.output_entries, config, "output_device_index", "output_device"
+            )
+            if selected_output_index is not None:
+                for i, entry in enumerate(self.output_entries):
+                    if entry["index"] == selected_output_index:
+                        self.output_choice.SetSelection(i)
+                        break
+                else:
+                    self.output_choice.SetSelection(0)
             else:
                 self.output_choice.SetSelection(0)
             
@@ -95,7 +130,25 @@ class SettingsApp(BlindApp):
             test_btn.SetForegroundColour(wx.Colour(255, 255, 255))
             test_btn.Bind(wx.EVT_BUTTON, self.on_test_audio)
             sizer.Add(test_btn, 0, wx.EXPAND | wx.ALL, 8)
-        
+
+        # Sound Theme Section
+        theme_label = wx.StaticText(panel, label="Sound Theme:")
+        theme_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        theme_label.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        sizer.Add(theme_label, 0, wx.ALL, 10)
+
+        themes = self.api.sounds.get_available_themes()
+        self.theme_choice = wx.Choice(panel, choices=themes if themes else ["Modern"])
+        self.theme_choice.SetBackgroundColour(wx.Colour(40, 40, 40))
+        self.theme_choice.SetForegroundColour(wx.Colour(255, 255, 255))
+        current_theme = self.api.sounds.current_theme
+        if current_theme in themes:
+            self.theme_choice.SetSelection(themes.index(current_theme))
+        else:
+            self.theme_choice.SetSelection(0)
+        self.theme_choice.Bind(wx.EVT_CHOICE, self.on_theme_preview)
+        sizer.Add(self.theme_choice, 0, wx.EXPAND | wx.ALL, 8)
+
         # Update button
         update_btn = wx.Button(panel, label="Check for Updates")
         update_btn.SetBackgroundColour(wx.Colour(50, 50, 50))
@@ -118,43 +171,30 @@ class SettingsApp(BlindApp):
     def get_input_devices(self):
         """Get list of available input devices."""
         try:
-            devices = sd.query_devices()
-            input_devices = [d['name'] for d in devices if d['max_input_channels'] > 0]
-            return input_devices if input_devices else ["Default"]
+            return audio_devices.list_input_devices()
         except Exception as e:
             print(f"Error querying input devices: {e}")
-            return ["Default"]
+            return []
 
     def get_output_devices(self):
         """Get list of available output devices."""
         try:
-            devices = sd.query_devices()
-            output_devices = [d['name'] for d in devices if d['max_output_channels'] > 0]
-            return output_devices if output_devices else ["Default"]
+            return audio_devices.list_output_devices()
         except Exception as e:
             print(f"Error querying output devices: {e}")
-            return ["Default"]
+            return []
+
+    def _device_label(self, device_entry):
+        return f"{device_entry['name']}"
 
     def load_device_config(self):
         """Load device configuration from file."""
-        if os.path.exists(self.device_config_path):
-            try:
-                with open(self.device_config_path, "r") as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"Error loading device config: {e}")
-        return {}
+        return audio_devices.load_device_config(self.api.data_dir)
 
     def save_device_config(self, input_device, output_device):
         """Save device configuration to file."""
-        config = {
-            "input_device": input_device,
-            "output_device": output_device
-        }
         try:
-            os.makedirs(os.path.dirname(self.device_config_path), exist_ok=True)
-            with open(self.device_config_path, "w") as f:
-                json.dump(config, f, indent=2)
+            audio_devices.save_device_config(self.api.data_dir, input_device, output_device)
         except Exception as e:
             print(f"Error saving device config: {e}")
 
@@ -162,6 +202,32 @@ class SettingsApp(BlindApp):
         """Test audio output."""
         self.api.speak("Testing audio. You should hear a sound.")
         self.api.play_sound("startup")
+
+    def on_theme_preview(self, event):
+        theme_name = self.theme_choice.GetStringSelection()
+        if theme_name:
+            self.api.sounds.current_theme = theme_name
+            self.api.play_sound("startup")
+            self.api.speak(theme_name)
+
+    def _apply_speech_mode_selection(self, announce=True):
+        sel = self.speech_choice.GetSelection()
+        if sel < 0 or sel >= len(self.speech_modes):
+            return
+        speech_mode = self.speech_modes[sel][1]
+        mode_ok = getattr(self.api.engine, "set_mode", lambda _m: False)(speech_mode)
+        if not announce:
+            return
+        if speech_mode == "nvda" and not getattr(self.api.engine, "use_nvda", False):
+            self.api.speak("NVDA is not active, so speech is using SAPI until NVDA is available.", interrupt=False)
+        elif mode_ok:
+            spoken_name = "Auto" if speech_mode == "auto" else speech_mode.upper()
+            self.api.speak(f"Speech mode switched to {spoken_name}.", interrupt=False)
+        else:
+            self.api.speak("Could not switch speech mode.", interrupt=False)
+
+    def on_speech_mode_change(self, event):
+        self._apply_speech_mode_selection(announce=True)
 
     def check_updates(self, event):
         self.api.speak("Checking for updates...")
@@ -176,19 +242,45 @@ class SettingsApp(BlindApp):
             
             # Re-install requirements
             subprocess.run(["pip", "install", "-r", "requirements.txt"], check=True)
+            self.cleanup_deprecated_sound_artifacts()
             self.api.speak("Update completed successfully. All dependencies are up to date.")
         except subprocess.CalledProcessError as e:
             self.api.speak(f"Update failed: {e.stderr if e.stderr else 'Check your internet connection or git status'}")
         except Exception as e:
             self.api.speak(f"Error during update: {e}")
 
+    def cleanup_deprecated_sound_artifacts(self):
+        """Clean stale/legacy sound-theme artifacts without resetting active settings."""
+        candidates = [
+            self.api.get_data_path("sound_theme_app_state.json"),
+            self.api.get_data_path("theme_creator_draft.json"),
+            self.api.get_data_path("theme_creator_step.tmp"),
+        ]
+        for path in candidates:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+
     def on_close(self, event=None):
         """Save settings and close."""
+        # Ensure speech selection is persisted even if user didn't change focus after selecting.
+        self._apply_speech_mode_selection(announce=False)
+
         if HAS_SOUNDDEVICE:
-            input_device = self.input_choice.GetStringSelection()
-            output_device = self.output_choice.GetStringSelection()
+            input_sel = self.input_choice.GetSelection()
+            output_sel = self.output_choice.GetSelection()
+            input_device = self.input_entries[input_sel] if 0 <= input_sel < len(self.input_entries) else {"index": None, "name": "Default"}
+            output_device = self.output_entries[output_sel] if 0 <= output_sel < len(self.output_entries) else {"index": None, "name": "Default"}
             self.save_device_config(input_device, output_device)
-            self.api.speak(f"Settings saved. Audio devices: {input_device}, {output_device}.")
+            self.api.speak(
+                f"Settings saved. Audio devices: input {input_device.get('name', 'Default')}, output {output_device.get('name', 'Default')}."
+            )
+        selected_theme = self.theme_choice.GetStringSelection()
+        if selected_theme:
+            self.api.sounds.save_theme_name(selected_theme)
+            self.api.sounds.current_theme = selected_theme
         
         if self.frame:
             self.frame.Destroy()
@@ -321,9 +413,12 @@ class FileExplorerApp(BlindApp):
         if is_dir:
             self.go_to_path(full_path)
         else:
-            self.api.speak(f"Opening {name}")
-            if name.lower().endswith(".txt"):
+            self.api.speak(f"Opening {name}", interrupt=False)
+            lower = name.lower()
+            if lower.endswith((".txt", ".md", ".log", ".json", ".py", ".csv")):
                 self.api.launch_app("TextEditorApp", file_path=full_path)
+            elif lower.endswith((".wav", ".mp3", ".ogg", ".flac")):
+                self.api.launch_app("AudioRecorderApp", file_path=full_path)
             else:
                 try:
                     if os.name == 'nt': os.startfile(full_path)
@@ -442,7 +537,7 @@ class TextEditorApp(BlindApp):
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         
         self.frame.Show()
-        self.api.speak("Text Editor opened.")
+        self.api.speak("Text Editor opened.", interrupt=False)
         self.text_ctrl.SetFocus()
         
         if file_path:
@@ -455,7 +550,7 @@ class TextEditorApp(BlindApp):
                 self.text_ctrl.SetValue(content)
                 self.current_file_path = file_path
                 self.frame.SetTitle(f"Text Editor - {os.path.basename(file_path)}")
-                self.api.speak(f"Loaded file: {os.path.basename(file_path)}")
+                self.api.speak(f"Loaded file: {os.path.basename(file_path)}", interrupt=False)
         except Exception as e:
             self.api.speak(f"Error loading file: {e}")
 
