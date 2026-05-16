@@ -16,7 +16,7 @@ class SettingsApp(BlindApp):
     def __init__(self, api):
         super().__init__(api)
         self.name = "System Settings"
-        self.description = "Configure voice speed, audio devices, and updates."
+        self.description = "Configure tts, audio devices, updates, and mor."
         self.help_text = "Use Tab to navigate controls, and Enter to save."
         self.docs = "Settings allows you to customize the OS behavior. Voice speed can be adjusted from 50 to 400. Configure audio input and output devices."
         self.device_config_path = self.api.get_data_path("device_config.json")
