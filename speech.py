@@ -1,10 +1,11 @@
 import ctypes
 import os
 import json
-import pyttsx3
 import threading
 import queue
 import time
+from comtypes.client import CreateObject
+from comtypes.gen import SpeechLib
 
 class SpeechEngine:
     def __init__(self):
@@ -17,24 +18,38 @@ class SpeechEngine:
         self.config_dir = os.path.join(os.path.expanduser("~"), ".py-os")
         self.config_path = os.path.join(self.config_dir, "speech_config.json")
         
-        # Try to load NVDA Controller Client
-        dll_name = "nvdaControllerClient64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8 else "nvdaControllerClient32.dll"
-        dll_path = os.path.join(os.getcwd(), dll_name)
-        
-        if os.path.exists(dll_path):
-            try:
-                self.nvda_dll = ctypes.windll.LoadLibrary(dll_path)
-                
-                # Define function signatures for reliability
-                self.nvda_dll.nvdaController_testIfRunning.restype = ctypes.c_int
-                self.nvda_dll.nvdaController_speakText.argtypes = [ctypes.c_wchar_p]
-                self.nvda_dll.nvdaController_speakText.restype = ctypes.c_int
-                self.nvda_dll.nvdaController_cancelSpeech.restype = ctypes.c_int
-            except Exception as e:
-                print(f"Failed to load NVDA DLL: {e}")
-
+        # Load mode first
         self.mode = self._load_mode()
+
+        # Try to load NVDA Controller Client only if not in sapi mode
+        if self.mode != "sapi":
+            dll_name = "nvdaControllerClient64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8 else "nvdaControllerClient32.dll"
+            dll_path = os.path.join(os.getcwd(), dll_name)
+            
+            if os.path.exists(dll_path):
+                try:
+                    self.nvda_dll = ctypes.windll.LoadLibrary(dll_path)
+                    
+                    # Define function signatures for reliability
+                    self.nvda_dll.nvdaController_testIfRunning.restype = ctypes.c_int
+                    self.nvda_dll.nvdaController_speakText.argtypes = [ctypes.c_wchar_p]
+                    self.nvda_dll.nvdaController_speakText.restype = ctypes.c_int
+                    self.nvda_dll.nvdaController_cancelSpeech.restype = ctypes.c_int
+                except Exception as e:
+                    print(f"Failed to load NVDA DLL: {e}")
+
         self._apply_mode()
+
+        # Initialize SAPI engine if needed
+        self.sapi_engine = None
+        if self.mode != "nvda":
+            self.sapi_engine = CreateObject("SAPI.SpVoice")
+            self.sapi_engine.Rate = 2  # Increase speed (Range -10 to 10)
+
+    def set_sapi_rate(self, rate):
+        """Set SAPI speech rate (Range -10 to 10)."""
+        if self.sapi_engine:
+            self.sapi_engine.Rate = rate
 
     def _nvda_available(self):
         if not self.nvda_dll:
@@ -50,11 +65,8 @@ class SpeechEngine:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     mode = json.load(f).get("speech_mode", "auto")
                     if mode in ("auto", "nvda", "sapi", "force_nvda", "force_sapi"):
-                        # Backward compatibility for older saved values.
-                        if mode == "force_nvda":
-                            mode = "nvda"
-                        elif mode == "force_sapi":
-                            mode = "sapi"
+                        if mode == "force_nvda": mode = "nvda"
+                        elif mode == "force_sapi": mode = "sapi"
                         return mode
         except Exception:
             pass
@@ -78,11 +90,9 @@ class SpeechEngine:
         if self.mode == "nvda":
             self.use_nvda = nvda_ok
             self.backend = "nvda" if nvda_ok else "sapi"
-            if not nvda_ok:
-                self._ensure_tts_thread()
+            if not nvda_ok: self._ensure_tts_thread()
             self._clear_queue()
         elif self.mode == "sapi":
-            # Hard lock to SAPI path in this mode.
             self.use_nvda = False
             self.backend = "sapi"
             self._cancel_nvda_if_possible()
@@ -91,96 +101,100 @@ class SpeechEngine:
         else:
             self.use_nvda = nvda_ok
             self.backend = "nvda" if nvda_ok else "sapi"
-            if not self.use_nvda:
-                self._ensure_tts_thread()
+            if not self.use_nvda: self._ensure_tts_thread()
 
     def _cancel_nvda_if_possible(self):
         try:
-            if self.nvda_dll:
-                self.nvda_dll.nvdaController_cancelSpeech()
-        except Exception:
-            pass
+            if self.nvda_dll: self.nvda_dll.nvdaController_cancelSpeech()
+        except Exception: pass
 
     def _clear_queue(self):
         while not self.speech_queue.empty():
-            try:
-                self.speech_queue.get_nowait()
-            except queue.Empty:
-                break
+            try: self.speech_queue.get_nowait()
+            except queue.Empty: break
 
     def set_mode(self, mode):
-        if mode not in ("auto", "nvda", "sapi"):
-            return False
+        if mode not in ("auto", "nvda", "sapi"): return False
         self.mode = mode
         self._save_mode()
         self._apply_mode()
+        
+        # Re-init engine if needed
+        if self.mode != "nvda" and not self.sapi_engine:
+            self.sapi_engine = CreateObject("SAPI.SpVoice")
         return True
 
-    def get_mode(self):
-        return self.mode
+    def get_mode(self): return self.mode
+
+    def get_sapi_voices(self):
+        """Return list of available SAPI voices."""
+        if not self.sapi_engine: return []
+        return [voice.GetDescription() for voice in self.sapi_engine.GetVoices()]
+
+    def set_sapi_voice(self, index):
+        """Set SAPI voice by index."""
+        if self.sapi_engine:
+            voices = self.sapi_engine.GetVoices()
+            if 0 <= index < voices.Count:
+                self.sapi_engine.Voice = voices.Item(index)
+
+    def set_sapi_rate(self, rate):
+        """Set SAPI speech rate (Range -10 to 10)."""
+        if self.sapi_engine:
+            self.sapi_engine.Rate = rate
 
     def speak(self, text, interrupt=True):
-        if not text:
-            return
+        if not text: return
 
-        # Enforce backend choice every call so mode cannot drift.
+        # Enforce strict backend logic
         if self.mode == "sapi":
             self.use_nvda = False
-            self.backend = "sapi"
-            self._cancel_nvda_if_possible()
-            self._ensure_tts_thread()
         elif self.mode == "nvda":
             self.use_nvda = self._nvda_available()
-            self.backend = "nvda" if self.use_nvda else "sapi"
-            if not self.use_nvda:
-                self._ensure_tts_thread()
         else:
-            # Re-evaluate availability in auto mode as NVDA can start/stop at runtime.
-            self._apply_mode()
+            self.use_nvda = self._nvda_available()
 
-        if self.use_nvda:
-            if interrupt:
-                self.nvda_dll.nvdaController_cancelSpeech()
+        if self.use_nvda and self.nvda_dll:
+            if interrupt: self.nvda_dll.nvdaController_cancelSpeech()
             self.nvda_dll.nvdaController_speakText(ctypes.c_wchar_p(text))
         else:
+            self.use_nvda = False
+            # Aggressively cancel NVDA speech if it's accidentally speaking
+            if self.nvda_dll: self.nvda_dll.nvdaController_cancelSpeech()
+            
             self._ensure_tts_thread()
             if interrupt:
-                # Clear the queue for interrupt
                 while not self.speech_queue.empty():
-                    try:
-                        self.speech_queue.get_nowait()
-                    except queue.Empty:
-                        break
+                    try: self.speech_queue.get_nowait()
+                    except queue.Empty: break
             self.speech_queue.put(text)
 
     def _tts_worker(self):
         while True:
             try:
-                text = self.speech_queue.get()
+                # Use a smaller timeout to check the queue faster
+                try:
+                    text = self.speech_queue.get(timeout=0.01)
+                except queue.Empty:
+                    time.sleep(0.01)
+                    continue
+
                 if text:
-                    # Recreate engine per utterance for stability after backend/mode switches.
-                    engine = pyttsx3.init()
-                    engine.say(text)
-                    engine.runAndWait()
-                    try:
-                        engine.stop()
-                    except Exception:
-                        pass
+                    if not self.sapi_engine:
+                        self.sapi_engine = CreateObject("SAPI.SpVoice")
+                    self.sapi_engine.Speak(text, SpeechLib.SVSFlagsAsync)
                 self.speech_queue.task_done()
             except Exception as e:
                 print(f"TTS Worker error: {e}")
-            time.sleep(0.1)
 
     def stop(self):
         if self.use_nvda:
             self.nvda_dll.nvdaController_cancelSpeech()
         else:
-            # Clearing the queue is effectively 'stopping' future speech
+            if self.sapi_engine:
+                self.sapi_engine.Speak("", SpeechLib.SVSFPurgeBeforeSpeak)
             while not self.speech_queue.empty():
-                try:
-                    self.speech_queue.get_nowait()
-                except queue.Empty:
-                    break
+                try: self.speech_queue.get_nowait()
+                except queue.Empty: break
 
-# Singleton instance
 engine = SpeechEngine()

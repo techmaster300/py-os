@@ -44,27 +44,38 @@ class ThemeCreatorApp(BlindApp):
         sizer.Add(self.label, 0, wx.ALL | wx.CENTER, 10)
 
         self.theme_name_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.theme_name_input.SetToolTip("Enter the name for your custom sound theme.")
         self.theme_name_input.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         sizer.Add(self.theme_name_input, 0, wx.EXPAND | wx.ALL, 10)
 
         self.mode_choice = wx.Choice(panel, choices=["Tones", "Audio File"])
+        self.mode_choice.SetToolTip("Select whether to use generated tones or an external audio file.")
         self.mode_choice.SetSelection(0)
         self.mode_choice.Hide()
         sizer.Add(self.mode_choice, 0, wx.EXPAND | wx.ALL, 10)
 
+        self.freq_label = wx.StaticText(panel, label="Frequencies (e.g. 440, 660, 0):")
+        self.freq_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.freq_label.Hide()
+        sizer.Add(self.freq_label, 0, wx.ALL, 8)
         self.freq_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.freq_input.SetHint("Frequencies, e.g. 440, 660, 0")
         self.freq_input.Hide()
         sizer.Add(self.freq_input, 0, wx.EXPAND | wx.ALL, 8)
 
+        self.dur_label = wx.StaticText(panel, label="Durations in milliseconds (e.g. 200, 300, 500):")
+        self.dur_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.dur_label.Hide()
+        sizer.Add(self.dur_label, 0, wx.ALL, 8)
         self.duration_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.duration_input.SetHint("Durations ms, e.g. 200, 300, 500")
         self.duration_input.Hide()
         sizer.Add(self.duration_input, 0, wx.EXPAND | wx.ALL, 8)
 
+        self.file_label = wx.StaticText(panel, label="Audio File Path:")
+        self.file_label.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.file_label.Hide()
+        sizer.Add(self.file_label, 0, wx.ALL, 8)
         file_row = wx.BoxSizer(wx.HORIZONTAL)
         self.file_path_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.file_path_input.SetHint("Type file path or click Browse")
         self.file_path_input.Hide()
         file_row.Add(self.file_path_input, 1, wx.EXPAND | wx.RIGHT, 8)
         self.browse_btn = wx.Button(panel, label="Browse...")
@@ -109,16 +120,12 @@ class ThemeCreatorApp(BlindApp):
             self.duration_input.Show()
             self.file_path_input.Hide()
             self.browse_btn.Hide()
-            if not self.freq_input.HasFocus() and not self.duration_input.HasFocus():
-                self.freq_input.SetFocus()
             self.api.speak("Tone mode. Enter frequencies then durations.")
         else:
             self.freq_input.Hide()
             self.duration_input.Hide()
             self.file_path_input.Show()
             self.browse_btn.Show()
-            if not self.file_path_input.HasFocus():
-                self.file_path_input.SetFocus()
             self.api.speak("File mode. Type a path or browse.")
         self.frame.Layout()
 

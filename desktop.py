@@ -122,6 +122,15 @@ class DesktopFrame(wx.Frame):
         self.app_sizer.Clear(True)
         self.app_buttons = []
 
+        # Define priority items to move to the end
+        priority_end = ["Text Editor", "Terminal"]
+        
+        # Split apps into normal and those to move to end
+        normal_apps = [a for a in self.apps if a.name not in priority_end]
+        ordered_end = [a for p in priority_end for a in self.apps if a.name == p]
+
+        self.apps = normal_apps + ordered_end
+
         for app in self.apps:
             btn = wx.Button(self.scrolled_window, label=app.name)
             btn.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM))
