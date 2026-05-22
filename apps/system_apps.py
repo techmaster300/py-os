@@ -22,6 +22,7 @@ class SettingsApp(BlindApp):
         self.device_config_path = self.api.get_data_path("device_config.json")
         self.input_entries = []
         self.output_entries = []
+        self.easter_egg_count = 0
 
     def get_input_devices(self):
         if not HAS_SOUNDDEVICE: return []
@@ -60,6 +61,17 @@ class SettingsApp(BlindApp):
             self.api.play_sound("startup")
             self.api.speak(theme_name)
 
+    def on_version_click(self, event):
+        print("Version button clicked!")
+        self.easter_egg_count += 1
+        if self.easter_egg_count < 3:
+            self.api.speak(f"{3 - self.easter_egg_count} more to unlock.")
+        elif self.easter_egg_count == 3:
+            self.api.speak("You found the secret! PyOS was made for YOU.")
+            wx.MessageBox("You found the secret! PyOS was made for YOU.", "Easter Egg")
+        else:
+            self.api.speak("You're a PyOS master!")
+
     def on_speech_mode_change(self, event):
         self._apply_speech_mode_selection(announce=True)
 
@@ -88,6 +100,11 @@ class SettingsApp(BlindApp):
         title = wx.StaticText(gen_panel, label="System Settings")
         title.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         gen_sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
+
+        # Version info for Easter egg
+        self.version_btn = wx.Button(gen_panel, label="Version: 2026.05.22 (Click for details)")
+        self.version_btn.Bind(wx.EVT_BUTTON, self.on_version_click)
+        gen_sizer.Add(self.version_btn, 0, wx.ALL | wx.CENTER, 5)
 
         theme_label = wx.StaticText(gen_panel, label="Sound Theme:")
         gen_sizer.Add(theme_label, 0, wx.ALL, 10)
@@ -125,7 +142,9 @@ class SettingsApp(BlindApp):
         # Speed
         speed_label = wx.StaticText(speech_panel, label="Voice Speed:")
         speech_sizer.Add(speed_label, 0, wx.ALL, 10)
-        self.speed_slider = wx.Slider(speech_panel, value=200, minValue=50, maxValue=400, style=wx.SL_HORIZONTAL)
+        current_rate = getattr(self.api.engine, "get_rate", lambda: 200)()
+        self.speed_slider = wx.Slider(speech_panel, value=current_rate, minValue=50, maxValue=400, style=wx.SL_HORIZONTAL)
+        self.speed_slider.Bind(wx.EVT_SLIDER, self.on_speed_change)
         speech_sizer.Add(self.speed_slider, 0, wx.EXPAND | wx.ALL, 10)
         speech_panel.SetSizer(speech_sizer)
 
@@ -155,3 +174,49 @@ class SettingsApp(BlindApp):
         audio_panel.SetSizer(audio_sizer)
         
         self.frame.Show()
+
+    def on_speed_change(self, event):
+        rate = self.speed_slider.GetValue()
+        self.apply_speed(rate)
+
+    def apply_speed(self, rate):
+        if hasattr(self.api.engine, "set_rate"):
+            self.api.engine.set_rate(rate)
+            self.api.speak(f"Speed {rate}", interrupt=True)
+            self.api.terminal_output(f"System: Voice speed set to {rate}.")
+
+    def get_terminal_commands(self):
+        return {
+            "speed <50-400>": "Set the system voice speed.",
+            "version": "Show system version (keep typing it!)."
+        }
+
+    def terminal_input(self, command):
+        # Allow setting speed from terminal: 'speed 300'
+        parts = command.split()
+        if not parts: return
+        action = parts[0].lower()
+
+        if action == "speed" and len(parts) >= 2:
+            try:
+                rate = int(parts[1])
+                if 50 <= rate <= 400:
+                    self.apply_speed(rate)
+                    # Update slider if GUI is open
+                    if self.frame:
+                        self.speed_slider.SetValue(rate)
+                else:
+                    self.api.terminal_output("Error: Speed must be between 50 and 400.")
+            except ValueError:
+                self.api.terminal_output("Error: Invalid speed value.")
+        elif action == "version":
+            self.easter_egg_count += 1
+            if self.easter_egg_count < 3:
+                self.api.terminal_output(f"PyOS Build 2026.05.22. {3 - self.easter_egg_count} more to unlock.")
+            elif self.easter_egg_count == 3:
+                self.api.terminal_output("You found the secret! PyOS was made for YOU.")
+                self.api.speak("You found the secret. PyOS was made for you.")
+            else:
+                self.api.terminal_output("You're a PyOS master!")
+        else:
+            self.api.terminal_output("Settings commands: 'speed <value>', 'version'")

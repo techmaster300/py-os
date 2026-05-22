@@ -17,9 +17,12 @@ class SpeechEngine:
         self.backend = "unknown"
         self.config_dir = os.path.join(os.path.expanduser("~"), ".py-os")
         self.config_path = os.path.join(self.config_dir, "speech_config.json")
+        self.rate = 200 # Default speed (mapped to SAPI 0 or similar)
         
-        # Load mode first
-        self.mode = self._load_mode()
+        # Load config (mode and rate)
+        config = self._load_config()
+        self.mode = config.get("speech_mode", "auto")
+        self.rate = config.get("speech_rate", 200)
 
         # Try to load NVDA Controller Client only if not in sapi mode
         if self.mode != "sapi":
@@ -44,12 +47,45 @@ class SpeechEngine:
         self.sapi_engine = None
         if self.mode != "nvda":
             self.sapi_engine = CreateObject("SAPI.SpVoice")
-            self.sapi_engine.Rate = 2  # Increase speed (Range -10 to 10)
+            self._apply_rate()
 
-    def set_sapi_rate(self, rate):
-        """Set SAPI speech rate (Range -10 to 10)."""
+    def _apply_rate(self):
+        """Map 50-400 to SAPI -10 to 10."""
         if self.sapi_engine:
-            self.sapi_engine.Rate = rate
+            # Simple linear mapping: 50 -> -10, 225 -> 0, 400 -> 10
+            # formula: (rate - 225) / 17.5 approx
+            sapi_rate = int((self.rate - 225) / 17.5)
+            sapi_rate = max(-10, min(10, sapi_rate))
+            self.sapi_engine.Rate = sapi_rate
+
+    def set_rate(self, rate):
+        self.rate = rate
+        self._apply_rate()
+        self._save_config()
+
+    def get_rate(self):
+        return self.rate
+
+    def _load_config(self):
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                    mode = config.get("speech_mode", "auto")
+                    if mode in ("force_nvda", "force_sapi"):
+                        config["speech_mode"] = "nvda" if mode == "force_nvda" else "sapi"
+                    return config
+        except Exception:
+            pass
+        return {"speech_mode": "auto", "speech_rate": 200}
+
+    def _save_config(self):
+        try:
+            os.makedirs(self.config_dir, exist_ok=True)
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump({"speech_mode": self.mode, "speech_rate": self.rate}, f, indent=2)
+        except Exception:
+            pass
 
     def _nvda_available(self):
         if not self.nvda_dll:
@@ -58,27 +94,6 @@ class SpeechEngine:
             return self.nvda_dll.nvdaController_testIfRunning() == 0
         except Exception:
             return False
-
-    def _load_mode(self):
-        try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    mode = json.load(f).get("speech_mode", "auto")
-                    if mode in ("auto", "nvda", "sapi", "force_nvda", "force_sapi"):
-                        if mode == "force_nvda": mode = "nvda"
-                        elif mode == "force_sapi": mode = "sapi"
-                        return mode
-        except Exception:
-            pass
-        return "auto"
-
-    def _save_mode(self):
-        try:
-            os.makedirs(self.config_dir, exist_ok=True)
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump({"speech_mode": self.mode}, f, indent=2)
-        except Exception:
-            pass
 
     def _ensure_tts_thread(self):
         if self.tts_thread is None or not self.tts_thread.is_alive():
@@ -170,6 +185,8 @@ class SpeechEngine:
             self.speech_queue.put(text)
 
     def _tts_worker(self):
+        import pythoncom
+        pythoncom.CoInitialize()
         while True:
             try:
                 # Use a smaller timeout to check the queue faster
@@ -186,6 +203,7 @@ class SpeechEngine:
                 self.speech_queue.task_done()
             except Exception as e:
                 print(f"TTS Worker error: {e}")
+        pythoncom.CoUninitialize()
 
     def stop(self):
         if self.use_nvda:

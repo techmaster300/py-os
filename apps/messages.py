@@ -98,9 +98,38 @@ class MessagesApp(BlindApp):
         except Exception as e:
             self.api.speak(f"Failed to send: {e}")
 
-    def on_item_focused(self, event):
-        item = self.msg_list.GetStringSelection()
-        self.api.speak(item)
+    def get_terminal_commands(self):
+        return {
+            "send <ip> <message>": "Send a message to an IP address.",
+            "list": "List recent messages."
+        }
+
+    def terminal_input(self, command):
+        parts = command.split(maxsplit=2)
+        if not parts: return
+        action = parts[0].lower()
+        
+        if action == "send":
+            if len(parts) >= 3:
+                target_ip = parts[1]
+                message = parts[2]
+                try:
+                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    client_socket.sendto(message.encode('utf-8'), (target_ip, self.api.message_service.port))
+                    formatted = f"To {target_ip}: {message}"
+                    self.api.message_service.history.append(formatted)
+                    self.add_message(formatted)
+                    self.api.terminal_output(f"Sent: {formatted}")
+                    self.api.speak(f"Message sent to {target_ip}")
+                except Exception as e:
+                    self.api.terminal_output(f"Error sending message: {e}")
+            else:
+                self.api.terminal_output("Usage: send <ip> <message>")
+        elif action == "list":
+            for msg in self.api.message_service.history:
+                self.api.terminal_output(msg)
+        else:
+            self.api.terminal_output("Unknown command. Available: send, list")
 
     def on_close(self, event=None):
         self.api.message_service.unsubscribe(self.add_message)

@@ -130,14 +130,38 @@ class AudioRecorderApp(BlindApp):
             self.path_input.SetValue(file_path)
             self.load_playback_file(file_path)
 
-    def on_key_press(self, event):
-        if event.GetKeyCode() == wx.WXK_SPACE:
-            if self.is_recording:
-                self.on_stop_recording()
-            else:
-                self.on_start_recording()
+    def get_terminal_commands(self):
+        return {
+            "record": "Start recording.",
+            "stop": "Stop recording.",
+            "save <name>": "Save the current recording with the given name.",
+            "play": "Play the loaded audio file.",
+            "pause": "Pause/Resume audio playback.",
+            "stop_playback": "Stop playback."
+        }
+
+    def terminal_input(self, command):
+        cmd = command.lower().split()
+        if not cmd: return
+        action = cmd[0]
+
+        if action == "record":
+            self.on_start_recording()
+        elif action == "stop":
+            self.on_stop_recording()
+        elif action == "save":
+            if len(cmd) > 1:
+                self.filename_input.SetValue(cmd[1])
+            self.on_save_recording()
+        elif action == "play":
+            self.on_play()
+        elif action == "pause":
+            self.on_pause_resume()
+        elif action == "stop_playback":
+            self.on_stop_playback()
         else:
-            event.Skip()
+            self.api.terminal_output(f"Unknown command: {action}. Type 'help' for available commands.")
+            self.api.speak("Unknown command.")
 
     def on_start_recording(self, event=None):
         if self.is_recording:

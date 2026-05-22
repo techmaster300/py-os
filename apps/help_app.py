@@ -85,10 +85,31 @@ class HelpApp(BlindApp):
         topic = self.list.GetStringSelection()
         self.api.speak(topic)
 
-    def on_read(self, event):
-        topic = self.list.GetStringSelection()
-        if topic in self.topics:
-            content = self.topics[topic]
-            self.api.speak(f"Reading {topic}: {content}")
+    def get_terminal_commands(self):
+        return {
+            "list": "List all available help topics.",
+            "read <topic>": "Read the content of a specific topic."
+        }
+
+    def terminal_input(self, command):
+        parts = command.split(maxsplit=1)
+        if not parts: return
+        action = parts[0].lower()
+        
+        if action == "list":
+            for topic in self.topics.keys():
+                self.api.terminal_output(topic)
+        elif action == "read":
+            if len(parts) > 1:
+                topic_query = parts[1].lower()
+                found = False
+                for topic in self.topics:
+                    if topic_query in topic.lower():
+                        self.api.terminal_output(f"{topic}: {self.topics[topic]}")
+                        found = True
+                if not found:
+                    self.api.terminal_output(f"Topic '{parts[1]}' not found.")
+            else:
+                self.api.terminal_output("Specify a topic: read <topic>")
         else:
-            self.api.speak("Please select a topic first.")
+            self.api.terminal_output("Unknown command. Available: list, read")

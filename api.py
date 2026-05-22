@@ -20,6 +20,14 @@ class BlindApp:
         """Override to launch the app's UI."""
         pass
 
+    def terminal_input(self, command):
+        """Override to handle input commands from the system terminal."""
+        self.api.speak(f"Command received: {command}")
+
+    def get_terminal_commands(self):
+        """Override to return a dictionary of command descriptions."""
+        return {}
+
     def on_close(self, event=None):
         """Cleanup and return focus to desktop."""
         if self.frame:
@@ -49,6 +57,11 @@ class SystemAPI:
     def get_vfs(self):
         return self.kernel
 
+    def terminal_output(self, text):
+        """Sends text to the global system terminal output, if active."""
+        if hasattr(self.kernel, 'output_callback') and self.kernel.output_callback:
+            self.kernel.output_callback(text)
+
     def speak(self, text, interrupt=True):
         self.engine.speak(text, interrupt)
 
@@ -76,47 +89,47 @@ class SystemAPI:
     def launch_app(self, app_name: str, **kwargs):
         """
         Launches an application by its name.
-        Searches for the app in known locations (e.g., 'apps.<module>.<ClassName>').
-        Passes keyword arguments to the app's constructor or run method.
+        Searches for the app class in the 'apps/' directory.
         """
         try:
             app_class = None
-            # Prefer loaded desktop app classes for reliable launches.
+            
+            # 1. Check already loaded apps in desktop
             for loaded_app in getattr(self.desktop, "apps", []):
-                if loaded_app.__class__.__name__ == app_name:
+                if loaded_app.__class__.__name__ == app_name or loaded_app.name == app_name:
                     app_class = loaded_app.__class__
                     break
 
-            # Fallback dynamic imports if not found in loaded apps.
+            # 2. Dynamic discovery if not found
             if not app_class:
-                possible_module_paths = [
-                    f"apps.{app_name.lower()}",
-                    "apps.system_apps",
-                    "apps.audio_recorder",
-                    "apps.sound_settings",
-                ]
-                for module_path in possible_module_paths:
-                    try:
-                        module = importlib.import_module(module_path)
-                        app_class = getattr(module, app_name, None)
-                        if app_class:
-                            break
-                    except ImportError:
-                        continue
-                    except AttributeError:
-                        continue
+                apps_dir = os.path.join(os.getcwd(), "apps")
+                for filename in os.listdir(apps_dir):
+                    if filename.endswith(".py") and filename != "__init__.py":
+                        module_path = f"apps.{filename[:-3]}"
+                        try:
+                            module = importlib.import_module(module_path)
+                            for attr in dir(module):
+                                cls = getattr(module, attr)
+                                if isinstance(cls, type) and issubclass(cls, BlindApp) and cls is not BlindApp:
+                                    if cls.__name__ == app_name:
+                                        app_class = cls
+                                        break
+                            if app_class: break
+                        except Exception: continue
 
             if not app_class:
-                self.speak(f"Application '{app_name}' not found or could not be loaded.")
+                self.speak(f"Application '{app_name}' not found.")
                 return
 
             # Instantiate with API object, and pass launch kwargs to run().
             instance = app_class(self)
+            # Use CallAfter to ensure UI creation happens on the main thread
             if kwargs:
-                instance.run(**kwargs)
+                wx.CallAfter(instance.run, **kwargs)
             else:
-                instance.run()
-            self.speak(f"Launched {app_name}.", interrupt=False)
+                wx.CallAfter(instance.run)
+            
+            self.speak(f"Launched {getattr(instance, 'name', app_name)}.", interrupt=False)
 
         except Exception as e:
             self.speak(f"Failed to launch {app_name}: {e}")

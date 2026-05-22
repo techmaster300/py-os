@@ -11,7 +11,7 @@ class TextEditorApp(BlindApp):
         self.docs = "A simple text editor that saves files to your PyOS data directory."
         self.filepath = None
 
-    def run(self):
+    def run(self, filepath=None):
         self.frame = wx.Frame(None, title="Text Editor", size=(600, 400))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
@@ -35,25 +35,73 @@ class TextEditorApp(BlindApp):
         
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         self.frame.Show()
-        self.api.speak("Text Editor opened.")
+        
+        if filepath:
+            self.filepath = filepath
+            try:
+                real_path = self.api.get_vfs().get_real_path(filepath)
+                if os.path.exists(real_path) and os.path.isfile(real_path):
+                    with open(real_path, "r") as f:
+                        self.text_ctrl.SetValue(f.read())
+                    self.api.speak(f"Text Editor opened, loaded {filepath}.")
+                else:
+                    self.api.speak(f"Text Editor opened. File {filepath} not found.")
+            except Exception as e:
+                self.api.speak(f"Text Editor opened, but failed to load {filepath}: {e}")
+        else:
+            self.api.speak("Text Editor opened.")
+        
         self.text_ctrl.SetFocus()
 
-    def on_save(self, event):
+    def on_save(self, event=None):
         if not self.filepath:
-            dlg = wx.FileDialog(self.frame, "Save File", wildcard="*.txt", style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+            dlg = wx.TextEntryDialog(self.frame, "Enter filename to save (in VFS):", "Save File")
             if dlg.ShowModal() == wx.ID_OK:
-                self.filepath = dlg.GetPath()
+                filename = dlg.GetValue()
+                if filename:
+                    self.filepath = filename
             dlg.Destroy()
+        
         if self.filepath:
-            with open(self.filepath, "w") as f:
-                f.write(self.text_ctrl.GetValue())
-            self.api.speak("File saved.")
+            try:
+                real_path = self.api.get_vfs().get_real_path(self.filepath)
+                os.makedirs(os.path.dirname(real_path), exist_ok=True)
+                with open(real_path, "w") as f:
+                    f.write(self.text_ctrl.GetValue())
+                
+                msg = f"File {self.filepath} saved to virtual file system."
+                self.api.speak(msg)
+                self.api.terminal_output(f"[Editor] {msg}")
+            except Exception as e:
+                self.api.speak(f"Failed to save file: {e}")
 
-    def on_open(self, event):
-        dlg = wx.FileDialog(self.frame, "Open File", wildcard="*.txt", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-        if dlg.ShowModal() == wx.ID_OK:
-            self.filepath = dlg.GetPath()
-            with open(self.filepath, "r") as f:
-                self.text_ctrl.SetValue(f.read())
-            self.api.speak(f"Loaded {os.path.basename(self.filepath)}.")
-        dlg.Destroy()
+    def get_terminal_commands(self):
+        return {
+            "save <filename>": "Save current content to VFS.",
+            "open <filename>": "Open file from VFS."
+        }
+
+    def terminal_input(self, command):
+        parts = command.split(maxsplit=1)
+        if not parts: return
+        action = parts[0].lower()
+        
+        if action == "save":
+            if len(parts) > 1:
+                self.filepath = parts[1]
+            self.on_save(None)
+        elif action == "open":
+            if len(parts) > 1:
+                self.filepath = parts[1]
+                # Trigger internal open logic if file exists
+                real_path = self.api.get_vfs().get_real_path(self.filepath)
+                if os.path.exists(real_path):
+                    with open(real_path, "r") as f:
+                        self.text_ctrl.SetValue(f.read())
+                    self.api.speak(f"Loaded {self.filepath}.")
+                else:
+                    self.api.terminal_output(f"File {self.filepath} not found.")
+            else:
+                self.api.terminal_output("Specify a filename: open <filename>")
+        else:
+            self.api.terminal_output("Unknown command. Available: save, open")

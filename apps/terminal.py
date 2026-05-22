@@ -46,14 +46,36 @@ class TerminalApp(BlindApp):
         self.api.speak(text)
 
     def on_enter(self, event):
-        cmd = self.input_ctrl.GetValue().strip()
+        cmd_str = self.input_ctrl.GetValue().strip()
         self.input_ctrl.Clear()
-        if cmd.lower() == "exit":
+        if not cmd_str: return
+
+        # If an app is active, it still gets first priority for terminal input
+        if self.api.desktop.active_app and hasattr(self.api.desktop.active_app, 'terminal_input'):
+            self.api.desktop.active_app.terminal_input(cmd_str)
+            self.log(f"-> {self.api.desktop.active_app.name}: {cmd_str}")
+            return
+
+        if cmd_str.lower() == "exit":
             self.on_close()
             return
+        
+        parts = cmd_str.split()
+        cmd = parts[0].lower()
+        args = parts[1:]
+
         kernel = self.api.get_vfs()
-        self.log(f"> {cmd}")
-        response = kernel.execute(cmd)
+        
+        # Special handling for 'open' to launch Text Editor for files
+        if cmd == "open" and args:
+            file_name = args[0]
+            real_path = kernel.get_real_path(file_name)
+            if os.path.isfile(real_path):
+                self.api.launch_app("TextEditorApp", filepath=file_name)
+                return
+
+        self.log(f"> {cmd_str}")
+        response = kernel.execute(cmd_str)
         if response:
             self.log(response)
             self.api.speak(response)

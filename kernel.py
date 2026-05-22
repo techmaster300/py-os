@@ -22,15 +22,22 @@ class VirtualOS:
         os.makedirs(os.path.join(self.root_dir, "documents"))
 
     def get_real_path(self, virtual_path):
-        # Very basic path resolution
+        # Ensure we're working with a normalized virtual path
+        # Normalize to handle '..' etc.
         if virtual_path.startswith("/"):
-            rel_path = virtual_path.lstrip("/")
+            vpath = os.path.normpath(virtual_path)
         else:
-            # Handle relative paths from current cwd
-            current_abs_vpath = os.path.join(self.cwd, virtual_path)
-            rel_path = os.path.normpath(current_abs_vpath).lstrip("/")
+            vpath = os.path.normpath(os.path.join(self.cwd, virtual_path))
         
-        return os.path.join(self.root_dir, rel_path)
+        # Strip leading separators for joining with root_dir
+        rel_path = vpath.lstrip(os.sep).lstrip("/")
+        
+        # Re-verify the final path is still under root_dir
+        final_path = os.path.abspath(os.path.join(self.root_dir, rel_path))
+        if not final_path.startswith(self.root_dir):
+            return self.root_dir # Default to root if traversal attempted
+            
+        return final_path
 
     def _shell_reader(self):
         while self.shell_proc:
@@ -90,7 +97,7 @@ class VirtualOS:
             
             if os.path.isdir(real_path):
                 # If it's a directory, change to it
-                self.cwd = os.path.join(self.cwd, file_name).replace("\\", "/")
+                self.cwd = os.path.normpath(os.path.join(self.cwd, file_name)).replace("\\", "/")
                 return f"Opened directory {file_name}."
             
             if os.path.exists(real_path):
@@ -116,7 +123,10 @@ class VirtualOS:
             real_path = self.get_real_path(file_name)
             if os.path.exists(real_path):
                 if os.path.isdir(real_path):
-                    os.rmdir(real_path)
+                    try:
+                        os.rmdir(real_path)
+                    except OSError:
+                        return f"Failed to delete {file_name}. Directory might not be empty."
                 else:
                     os.remove(real_path)
                 return f"Deleted {file_name}."
@@ -124,17 +134,32 @@ class VirtualOS:
                 return f"Item {file_name} not found."
 
         elif cmd == "shutdown":
-            subprocess.Popen(["shutdown", "/s", "/t", "0"])
-            return "System is shutting down..."
+            if args and args[0] == "now":
+                subprocess.Popen(["shutdown", "/s", "/t", "0"])
+                return "System is shutting down..."
+            return "Are you sure? Type 'shutdown now' to confirm."
 
         elif cmd == "reboot":
-            subprocess.Popen(["shutdown", "/r", "/t", "0"])
-            return "System is rebooting..."
+            if args and args[0] == "now":
+                subprocess.Popen(["shutdown", "/r", "/t", "0"])
+                return "System is rebooting..."
+            return "Are you sure? Type 'reboot now' to confirm."
 
         elif cmd == "winshell":
             if not args or args[0] == "help":
-                return "Winshell usage: winshell powershell | winshell cmd"
+                return "Winshell usage: \n'winshell powershell' or 'winshell cmd' to enter interactive mode.\n'winshell run <command>' to execute a single command."
             
+            if args[0] == "run":
+                command = " ".join(args[1:])
+                if not command: return "Please specify a command to run."
+                try:
+                    result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT, text=True)
+                    return result if result else "Command executed successfully (no output)."
+                except subprocess.CalledProcessError as e:
+                    return f"Error executing command: {e.output}"
+                except Exception as e:
+                    return f"Failed to run command: {e}"
+
             shell_type = args[0]
             executable = "cmd.exe" if shell_type == "cmd" else "powershell.exe"
             

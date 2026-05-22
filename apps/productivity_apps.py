@@ -49,6 +49,21 @@ class TimerApp(BlindApp):
         self.api.play_sound("alert")
         wx.CallAfter(self.on_close)
 
+    def get_terminal_commands(self):
+        return {"start <seconds>": "Start a timer for the specified seconds."}
+
+    def terminal_input(self, command):
+        parts = command.split()
+        if len(parts) >= 2 and parts[0].lower() == "start":
+            try:
+                seconds = int(parts[1])
+                self.api.speak(f"Timer started for {seconds} seconds.")
+                threading.Thread(target=self.run_timer, args=(seconds,), daemon=True).start()
+            except ValueError:
+                self.api.terminal_output("Error: Please enter a valid number.")
+        else:
+            self.api.terminal_output("Settings commands: 'start <seconds>'")
+
 class RemindersApp(BlindApp):
     def __init__(self, api):
         super().__init__(api)
@@ -64,14 +79,17 @@ class RemindersApp(BlindApp):
             try:
                 with open(self.db_path, "r") as f:
                     self.reminders = json.load(f)
-            except: self.reminders = []
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Error loading reminders: {e}")
+                self.reminders = []
         else: self.reminders = []
 
     def save_reminders(self):
         try:
             with open(self.db_path, "w") as f:
                 json.dump(self.reminders, f)
-        except: pass
+        except IOError as e:
+            print(f"Error saving reminders: {e}")
 
     def run(self):
         self.frame = wx.Frame(None, title="Reminders", size=(400, 400))
@@ -105,6 +123,35 @@ class RemindersApp(BlindApp):
             self.save_reminders()
             self.input_ctrl.Clear()
             self.api.speak(f"Reminder added: {text}")
+
+    def get_terminal_commands(self):
+        return {
+            "add <text>": "Add a new reminder.",
+            "list": "List all current reminders."
+        }
+
+    def terminal_input(self, command):
+        parts = command.split(maxsplit=1)
+        if not parts: return
+        action = parts[0].lower()
+        
+        if action == "add":
+            if len(parts) > 1:
+                reminder = parts[1]
+                self.reminders.append(reminder)
+                if self.frame: self.list.Append(reminder)
+                self.save_reminders()
+                self.api.terminal_output(f"Reminder added: {reminder}")
+                self.api.speak("Reminder added.")
+            else:
+                self.api.terminal_output("Specify reminder text: add <text>")
+        elif action == "list":
+            if not self.reminders:
+                self.api.terminal_output("No reminders.")
+            for i, r in enumerate(self.reminders):
+                self.api.terminal_output(f"{i+1}: {r}")
+        else:
+            self.api.terminal_output("Unknown command. Available: add, list")
 
     def on_select(self, event):
         item = self.list.GetStringSelection()
