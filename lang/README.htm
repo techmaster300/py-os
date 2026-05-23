@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PyOS Translation Guide</title>
+</head>
+<body style="background:#000;color:#fff;font-family:sans-serif;padding:2em">
+<h1>PyOS Translation Guide</h1>
+<p>Adding a new language is simple:</p>
+<ol>
+<li>Copy <code>en.json</code> and rename it to your language code (e.g. <code>fr.json</code>, <code>de.json</code>, <code>es.json</code>).</li>
+<li>Translate the values (right side of each colon). <strong>Never change the keys</strong> (left side).</li>
+<li>Restart PyOS. Your language appears in Settings → General → Language.</li>
+</ol>
+<h2>Example</h2>
+<pre>
+{
+  "desktop.header": "PyOS Desktop",
+  "desktop.greeting": "Welcome to PyOS..."
+}
+</pre>
+<p>Becomes:</p>
+<pre>
+{
+  "desktop.header": "Bureau PyOS",
+  "desktop.greeting": "Bienvenue sur PyOS..."
+}
+</pre>
+<h2>Format variables</h2>
+<p>Some values contain <code>{name}</code> or <code>{count}</code> placeholders. Keep them as-is in your translation.</p>
+<p>Example: <code>"Launching {name}"</code> in French → <code>"Lancement de {name}"</code></p>
+</body>
+</html>
