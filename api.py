@@ -299,10 +299,11 @@ class BlindApp:
             sc.SetName(name)
         return sc
 
-    def add_separator(self, sizer, border=5):
-        if not self.frame:
+    def add_separator(self, sizer, border=5, parent=None):
+        p = parent or self.frame
+        if not p:
             return
-        sep = wx.StaticLine(self.frame, style=wx.LI_HORIZONTAL)
+        sep = wx.StaticLine(p, style=wx.LI_HORIZONTAL)
         sizer.Add(sep, 0, wx.EXPAND | wx.ALL, border)
 
     # ── Sizer shortcuts ───────────────────────────────────────────────────

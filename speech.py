@@ -5,8 +5,11 @@ import threading
 import queue
 import time
 from comtypes.client import CreateObject
-from comtypes.gen import SpeechLib
 import audio_devices
+
+# SAPI speak flags (avoids comtypes.gen.SpeechLib import which can fail)
+SVSFlagsAsync = 1
+SVSFPurgeBeforeSpeak = 2
 
 class SpeechEngine:
     def __init__(self):

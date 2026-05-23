@@ -511,7 +511,7 @@ class SettingsApp(BlindApp):
         app_scroll_sizer.Add(row, 0, wx.EXPAND)
 
         # Lock screen section
-        self.add_separator(app_scroll_sizer, 10)
+        self.add_separator(app_scroll_sizer, 10, app_scroll)
 
         lock_label = wx.StaticText(app_scroll, label="Lock Screen")
         lock_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
