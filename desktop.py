@@ -160,9 +160,11 @@ class DesktopFrame(wx.Frame):
             subprocess.Popen([sys.executable, __file__])
             self._allow_close = True
             self.Close()
+            wx.CallAfter(wx.Exit)
         elif id_ == 5013:
             self._allow_close = True
             self.Close()
+            wx.CallAfter(wx.Exit)
 
     def _on_close(self, event):
         if not getattr(self, '_allow_close', False):
