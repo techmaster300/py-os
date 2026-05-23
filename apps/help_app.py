@@ -56,39 +56,33 @@ class HelpApp(BlindApp):
 
     def run(self):
         self._create_frame("Help and Documentation", (600, 500))
-        panel = wx.Panel(self.frame)
+        panel = self.make_panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = self.vbox()
         
         title = wx.StaticText(panel, label="Help Center")
         title.SetForegroundColour(wx.Colour(255, 255, 255))
         title.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
         
-        topics_label = wx.StaticText(panel, label="Select a Topic:")
-        topics_label.SetForegroundColour(wx.Colour(200, 200, 200))
-        sizer.Add(topics_label, 0, wx.LEFT | wx.TOP, 10)
+        sizer.Add(self.make_static(panel, "Select a Topic:", "Topics Label"), 0, wx.LEFT | wx.TOP, 10)
 
-        self.list = wx.ListBox(panel, choices=list(self.topics.keys()), style=wx.LB_SINGLE)
+        self.list = self.make_listbox(panel, choices=list(self.topics.keys()), name="Topics List")
         self.list.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.list.SetForegroundColour(wx.Colour(255, 255, 255))
         self.list.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM))
         sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 10)
         
-        read_btn = wx.Button(panel, label="Read Topic")
-        read_btn.SetDefault()
-        sizer.Add(read_btn, 0, wx.ALL | wx.CENTER, 10)
+        sizer.Add(self.make_button(panel, "Read Topic", self.on_read, "Read Topic"), 0, wx.ALL | wx.CENTER, 10)
         
         panel.SetSizer(sizer)
         
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_read)
-        read_btn.Bind(wx.EVT_BUTTON, self.on_read)
         self.list.Bind(wx.EVT_LISTBOX, self.on_select)
         
         self.api.speak("Help Center opened. Select a topic to read.")
         self._show_app(self.list)
-        self.list.SetFocus()
 
     def on_select(self, event):
         topic = self.list.GetStringSelection()

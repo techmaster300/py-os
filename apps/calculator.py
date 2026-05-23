@@ -27,10 +27,10 @@ class Calculator(BlindApp):
         self.bind_accelerator(wx.ACCEL_NORMAL, wx.WXK_ESCAPE, nid, self.on_clear)
 
         self._create_frame("Calculator", (320, 480))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        self.display = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.display = self.make_textctrl(panel, name="Calculator Display", style=wx.TE_PROCESS_ENTER)
         self.display.SetBackgroundColour(wx.Colour(30, 30, 30))
         self.display.SetForegroundColour(wx.Colour(255, 255, 255))
         self.display.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
@@ -51,25 +51,25 @@ class Calculator(BlindApp):
             ("0", "0"), (".", "."), ("C", "C"), ("+", "+"),
             ("MC", "MC"), ("MR", "MR"), ("M+", "M+"), ("=", "="),
         ]
+        def make_handler(a):
+            if a == "=":
+                return self.on_calculate
+            if a == "C":
+                return self.on_clear
+            if a == "MC":
+                return lambda evt: self.on_memory("MC")
+            if a == "MR":
+                return lambda evt: self.on_memory("MR")
+            if a == "M+":
+                return lambda evt: self.on_memory("M+")
+            return lambda evt, d=a: self.on_insert(d)
         for label, action in buttons:
-            btn = wx.Button(panel, label=label, size=(60, 40))
+            btn = self.make_button(panel, label, make_handler(action), label)
             btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            if action in ("=",):
-                btn.Bind(wx.EVT_BUTTON, self.on_calculate)
-            elif action == "C":
-                btn.Bind(wx.EVT_BUTTON, self.on_clear)
-            elif action == "MC":
-                btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_memory("MC"))
-            elif action == "MR":
-                btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_memory("MR"))
-            elif action == "M+":
-                btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_memory("M+"))
-            else:
-                btn.Bind(wx.EVT_BUTTON, lambda evt, d=action: self.on_insert(d))
             num_pad.Add(btn, 0, wx.EXPAND)
         sizer.Add(num_pad, 0, wx.EXPAND | wx.ALL, 10)
 
-        self.history_box = wx.ListBox(panel)
+        self.history_box = self.make_listbox(panel, name="History")
         self.history_box.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.history_box.SetForegroundColour(wx.Colour(200, 200, 200))
         self.history_box.Bind(wx.EVT_LISTBOX_DCLICK, self.on_history_select)

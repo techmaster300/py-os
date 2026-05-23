@@ -18,51 +18,43 @@ class MessagesApp(BlindApp):
 
     def run(self):
         self._create_frame(title="Master-Chat", size=(500, 600))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        filter_sizer.Add(wx.StaticText(panel, label="Filter by user:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-        self.filter_input = wx.TextCtrl(panel)
+        filter_sizer = self.hbox()
+        filter_sizer.Add(self.make_static(panel, "Filter by user:", "Filter Label"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        self.filter_input = self.make_textctrl(panel, name="Filter Input")
         self.filter_input.SetHint("Username filter")
         self.filter_input.Bind(wx.EVT_TEXT, self.on_filter)
         filter_sizer.Add(self.filter_input, 1, wx.EXPAND | wx.ALL, 5)
         sizer.Add(filter_sizer, 0, wx.EXPAND)
 
-        auth_sizer = wx.BoxSizer(wx.VERTICAL)
-        auth_sizer.Add(wx.StaticText(panel, label="Enter Username:"), 0, wx.ALL, 5)
-        self.username_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        auth_sizer = self.vbox()
+        auth_sizer.Add(self.make_static(panel, "Enter Username:", "Username Label"), 0, wx.ALL, 5)
+        self.username_input = self.make_textctrl(panel, name="Username Input", style=wx.TE_PROCESS_ENTER)
         self.username_input.SetHint("Username")
         auth_sizer.Add(self.username_input, 1, wx.EXPAND | wx.ALL, 5)
 
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        reg_btn = wx.Button(panel, label="Register")
-        reg_btn.Bind(wx.EVT_BUTTON, self.on_register)
-        btn_sizer.Add(reg_btn, 0, wx.ALL, 5)
-
-        login_btn = wx.Button(panel, label="Login")
-        login_btn.Bind(wx.EVT_BUTTON, self.on_login)
-        btn_sizer.Add(login_btn, 0, wx.ALL, 5)
-
-        disconnect_btn = wx.Button(panel, label="Disconnect")
-        disconnect_btn.Bind(wx.EVT_BUTTON, self.on_logout)
-        btn_sizer.Add(disconnect_btn, 0, wx.ALL, 5)
+        btn_sizer = self.hbox()
+        btn_sizer.Add(self.make_button(panel, "Register", self.on_register, "Register"), 0, wx.ALL, 5)
+        btn_sizer.Add(self.make_button(panel, "Login", self.on_login, "Login"), 0, wx.ALL, 5)
+        btn_sizer.Add(self.make_button(panel, "Disconnect", self.on_logout, "Disconnect"), 0, wx.ALL, 5)
         auth_sizer.Add(btn_sizer, 0, wx.EXPAND)
 
         sizer.Add(auth_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
-        sizer.Add(wx.StaticText(panel, label="Message History:"), 0, wx.LEFT, 10)
-        self.msg_list = wx.ListBox(panel)
+        sizer.Add(self.make_static(panel, "Message History:", "History Label"), 0, wx.LEFT, 10)
+        self.msg_list = self.make_listbox(panel, name="Message History")
         sizer.Add(self.msg_list, 1, wx.EXPAND | wx.ALL, 10)
 
-        sizer.Add(wx.StaticText(panel, label="Type Message:"), 0, wx.LEFT, 10)
-        self.send_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        sizer.Add(self.make_static(panel, "Type Message:", "Send Label"), 0, wx.LEFT, 10)
+        self.send_input = self.make_textctrl(panel, name="Send Input", style=wx.TE_PROCESS_ENTER)
         self.send_input.SetHint("Message")
         self.send_input.Disable()
         sizer.Add(self.send_input, 0, wx.EXPAND | wx.ALL, 10)
         self.send_input.Bind(wx.EVT_TEXT_ENTER, self.on_send)
 
-        self.status_label = wx.StaticText(panel, label="Not connected")
+        self.status_label = self.make_static(panel, "Not connected", "Status Label")
         sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 5)
 
         panel.SetSizer(sizer)

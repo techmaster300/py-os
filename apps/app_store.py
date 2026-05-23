@@ -33,39 +33,27 @@ class AppStore(BlindApp):
 
     def run(self):
         self._create_frame("App Store", (500, 500))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        search_label = wx.StaticText(panel, label="Search (type to filter):")
-        search_label.SetName("Search Label")
-        sizer.Add(search_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
-        self.search_input = wx.TextCtrl(panel)
-        self.search_input.SetName("Search Input")
+        sizer.Add(self.make_static(panel, "Search (type to filter):", "Search Label"), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        self.search_input = self.make_textctrl(panel, name="Search Input")
         self.search_input.Bind(wx.EVT_TEXT, self.on_search)
         sizer.Add(self.search_input, 0, wx.EXPAND | wx.ALL, 10)
 
-        self.listbox = wx.ListBox(panel)
-        self.listbox.SetName("Apps List")
+        self.listbox = self.make_listbox(panel, name="Apps List")
         self.listbox.Bind(wx.EVT_LISTBOX, self.on_select)
         sizer.Add(self.listbox, 1, wx.EXPAND | wx.ALL, 10)
 
-        self.desc_label = wx.StaticText(panel, label="Description: ", style=wx.ALIGN_LEFT)
-        self.desc_label.SetName("Description")
-        sizer.Add(self.desc_label, 0, wx.EXPAND | wx.ALL, 10)
+        self.desc_label = self.make_static(panel, "Description: ", "Description")
+        sizer.Add(self.desc_label, 1, wx.EXPAND | wx.ALL, 10)
 
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        download_btn = wx.Button(panel, label="Download")
-        download_btn.SetName("Download")
-        download_btn.Bind(wx.EVT_BUTTON, self.on_download)
-        btn_sizer.Add(download_btn, 1, wx.ALL, 5)
-        refresh_btn = wx.Button(panel, label="Refresh")
-        refresh_btn.SetName("Refresh")
-        refresh_btn.Bind(wx.EVT_BUTTON, self.on_refresh)
-        btn_sizer.Add(refresh_btn, 1, wx.ALL, 5)
+        btn_sizer = self.hbox()
+        btn_sizer.Add(self.make_button(panel, "Download", self.on_download, "Download"), 1, wx.ALL, 5)
+        btn_sizer.Add(self.make_button(panel, "Refresh", self.on_refresh, "Refresh"), 1, wx.ALL, 5)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-        self.status_label = wx.StaticText(panel, label="")
-        self.status_label.SetName("Status")
+        self.status_label = self.make_static(panel, "", "Status")
         sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 5)
 
         panel.SetSizer(sizer)
@@ -147,11 +135,11 @@ class AppStore(BlindApp):
                 self.status_label.SetLabel(f"Downloaded {name}.")
                 self.api.speak(f"Downloaded {name}.")
             elif "error" in resp:
-                self.alert(f"Download failed: {resp['error']}", "Error")
+                self.show_error(f"Download failed: {resp['error']}")
                 self.status_label.SetLabel(f"Failed: {resp['error']}")
             else:
-                self.alert("Download failed.", "Error")
+                self.show_error("Download failed.")
                 self.status_label.SetLabel("Download failed.")
         except Exception:
-            self.alert("Cannot reach server. Is it running?", "Error")
+            self.show_error("Cannot reach server. Is it running?")
             self.status_label.SetLabel("Cannot reach server.")

@@ -26,16 +26,16 @@ class TextEditorApp(BlindApp):
             a_id += 1
 
         self._create_frame("Text Editor", (600, 450))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
+        self.text_ctrl = self.make_textctrl(panel, name="Editor Text", style=wx.TE_MULTILINE)
         self.text_ctrl.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.text_ctrl.SetForegroundColour(wx.Colour(255, 255, 255))
         self.text_ctrl.Bind(wx.EVT_KEY_UP, self.on_update_status)
         sizer.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
-        self.status_bar = wx.StaticText(panel, label="No file open")
+        self.status_bar = self.make_static(panel, "No file open", "Status Bar")
         self.status_bar.SetForegroundColour(wx.Colour(200, 200, 200))
         sizer.Add(self.status_bar, 0, wx.EXPAND | wx.ALL, 5)
 

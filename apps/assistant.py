@@ -61,30 +61,25 @@ class AssistantApp(BlindApp):
 
     def run(self):
         self._create_frame('AI Assistant', size=(500, 350))
-        panel = wx.Panel(self.frame)
+        panel = self.make_panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(20, 20, 50))
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = self.vbox()
 
-        top_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        top_sizer = self.hbox()
         self.status_label = wx.StaticText(panel, label="Type your question and press Enter")
         self.status_label.SetForegroundColour(wx.Colour(255, 255, 255))
         self.status_label.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         top_sizer.Add(self.status_label, 1, wx.ALL | wx.CENTER, 20)
 
-        settings_btn = wx.Button(panel, label="Settings")
-        settings_btn.Bind(wx.EVT_BUTTON, self.on_settings)
-        top_sizer.Add(settings_btn, 0, wx.ALL, 10)
-
-        clear_btn = wx.Button(panel, label="Clear")
-        clear_btn.Bind(wx.EVT_BUTTON, self.on_clear)
-        top_sizer.Add(clear_btn, 0, wx.ALL, 10)
+        top_sizer.Add(self.make_button(panel, "Settings", self.on_settings, "Settings"), 0, wx.ALL, 10)
+        top_sizer.Add(self.make_button(panel, "Clear", self.on_clear, "Clear"), 0, wx.ALL, 10)
 
         sizer.Add(top_sizer, 0, wx.EXPAND)
 
-        self.input_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.input_ctrl = self.make_textctrl(panel, name="Question Input", style=wx.TE_PROCESS_ENTER)
         sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.ALL, 20)
 
-        self.history = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY)
+        self.history = self.make_textctrl(panel, name="Conversation History", style=wx.TE_MULTILINE | wx.TE_READONLY)
         self.history.SetBackgroundColour(wx.Colour(10, 10, 30))
         self.history.SetForegroundColour(wx.Colour(200, 200, 255))
         sizer.Add(self.history, 1, wx.EXPAND | wx.ALL, 10)
@@ -115,14 +110,14 @@ class AssistantApp(BlindApp):
         self.model = model
         self.system_prompt = sp.strip() or self.system_prompt
         self.save_settings()
-        self.alert("Settings saved.", "Settings")
+        self.show_info("Settings saved.")
 
     def on_clear(self, event):
         if self.confirm("Clear all conversation history?", "Clear History"):
             self.conversation.clear()
             self.save_conversation()
             self.history.Clear()
-            self.alert("Conversation history cleared.", "Clear History")
+            self.show_info("Conversation history cleared.")
 
     def on_ask(self, event):
         prompt = self.input_ctrl.GetValue().strip()

@@ -72,6 +72,7 @@
   "common.info": "Information",
   "common.confirm": "Confirm",
   "common.alert": "Alert",
+  "app.unsaved_changes": "You have unsaved changes. Close anyway?",
 
   "dev_mode.enabled": "You are now a developer!",
   "dev_mode.disabled": "Developer mode disabled.",

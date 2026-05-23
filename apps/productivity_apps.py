@@ -18,39 +18,27 @@ class TimerApp(BlindApp):
 
     def run(self):
         self._create_frame("Timer", (320, 300))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        label = wx.StaticText(panel, label="Enter seconds:")
-        label.SetForegroundColour(wx.Colour(255, 255, 255))
-        sizer.Add(label, 0, wx.ALL | wx.CENTER, 5)
+        sizer.Add(self.make_static(panel, "Enter seconds:", "Seconds Label"), 0, wx.ALL | wx.CENTER, 5)
 
-        self.input_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.input_ctrl = self.make_textctrl(panel, name="Seconds Input", style=wx.TE_PROCESS_ENTER)
         sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.ALL, 10)
 
-        preset_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        preset_sizer = self.hbox()
         for sec, label_text in [(30, "30s"), (60, "1m"), (300, "5m")]:
-            btn = wx.Button(panel, label=label_text)
-            btn.Bind(wx.EVT_BUTTON, lambda evt, s=sec: self.on_preset(s))
-            preset_sizer.Add(btn, 1, wx.ALL, 3)
+            preset_sizer.Add(self.make_button(panel, label_text, lambda evt, s=sec: self.on_preset(s), label_text), 1, wx.ALL, 3)
         sizer.Add(preset_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-        self.status_label = wx.StaticText(panel, label="Ready")
+        self.status_label = self.make_static(panel, "Ready", "Status")
         self.status_label.SetForegroundColour(wx.Colour(200, 200, 200))
         sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 5)
 
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        start_btn = wx.Button(panel, label="Start")
-        start_btn.Bind(wx.EVT_BUTTON, self.on_start)
-        btn_sizer.Add(start_btn, 1, wx.ALL, 5)
-
-        cancel_btn = wx.Button(panel, label="Cancel")
-        cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
-        btn_sizer.Add(cancel_btn, 1, wx.ALL, 5)
-
-        speak_btn = wx.Button(panel, label="Speak Time")
-        speak_btn.Bind(wx.EVT_BUTTON, self.on_speak_remaining)
-        btn_sizer.Add(speak_btn, 1, wx.ALL, 5)
+        btn_sizer = self.hbox()
+        btn_sizer.Add(self.make_button(panel, "Start", self.on_start, "Start Timer"), 1, wx.ALL, 5)
+        btn_sizer.Add(self.make_button(panel, "Cancel", self.on_cancel, "Cancel Timer"), 1, wx.ALL, 5)
+        btn_sizer.Add(self.make_button(panel, "Speak Time", self.on_speak_remaining, "Speak Remaining Time"), 1, wx.ALL, 5)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         panel.SetSizer(sizer)
@@ -174,25 +162,19 @@ class RemindersApp(BlindApp):
 
     def run(self):
         self._create_frame("Reminders", (450, 450))
-        panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel = self.make_panel(self.frame)
+        sizer = self.vbox()
 
-        self.input_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.input_ctrl = self.make_textctrl(panel, name="Reminder Input", style=wx.TE_PROCESS_ENTER)
         sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.ALL, 10)
 
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        add_btn = wx.Button(panel, label="Add")
-        add_btn.Bind(wx.EVT_BUTTON, self.on_add)
-        btn_sizer.Add(add_btn, 1, wx.ALL, 3)
-        edit_btn = wx.Button(panel, label="Edit")
-        edit_btn.Bind(wx.EVT_BUTTON, self.on_edit)
-        btn_sizer.Add(edit_btn, 1, wx.ALL, 3)
-        priority_btn = wx.Button(panel, label="Priority")
-        priority_btn.Bind(wx.EVT_BUTTON, self.on_set_priority)
-        btn_sizer.Add(priority_btn, 1, wx.ALL, 3)
+        btn_sizer = self.hbox()
+        btn_sizer.Add(self.make_button(panel, "Add", self.on_add, "Add Reminder"), 1, wx.ALL, 3)
+        btn_sizer.Add(self.make_button(panel, "Edit", self.on_edit, "Edit Reminder"), 1, wx.ALL, 3)
+        btn_sizer.Add(self.make_button(panel, "Priority", self.on_set_priority, "Set Priority"), 1, wx.ALL, 3)
         sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-        self.list = wx.ListBox(panel)
+        self.list = self.make_listbox(panel, name="Reminders List")
         self.list.SetBackgroundColour(wx.Colour(20, 20, 20))
         self.list.SetForegroundColour(wx.Colour(255, 255, 255))
         sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 10)

@@ -25,14 +25,16 @@ class TerminalApp(BlindApp):
         self.bind_accelerator(wx.ACCEL_CTRL, ord('0'), a_id, self.on_font_reset)
 
         self._create_frame('Terminal', (600, 400))
-        self.panel = wx.Panel(self.frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        self.output_text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)
+        self.panel = self.make_panel(self.frame)
+        sizer = self.vbox()
+
+        self.output_text = self.make_textctrl(self.panel, name="Terminal Output", style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)
         self.output_text.SetBackgroundColour(wx.Colour(0, 0, 0))
         self.output_text.SetForegroundColour(wx.Colour(255, 255, 255))
         self._apply_output_font()
         sizer.Add(self.output_text, 1, wx.EXPAND | wx.ALL, 10)
-        self.input_ctrl = wx.TextCtrl(self.panel, style=wx.TE_PROCESS_ENTER)
+
+        self.input_ctrl = self.make_textctrl(self.panel, name="Command Input", style=wx.TE_PROCESS_ENTER)
         self.input_ctrl.SetBackgroundColour(wx.Colour(30, 30, 30))
         self.input_ctrl.SetForegroundColour(wx.Colour(0, 255, 0))
         self.input_ctrl.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
