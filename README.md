@@ -39,32 +39,19 @@ To get started with py-os and prepare it for use from source:
     cd py-os 
     ```
 
-2.  **Set up a virtual environment (Recommended):**
-    Using a virtual environment is highly recommended to manage project dependencies without conflicts.
-    ```bash
-    # Create a virtual environment (e.g., named 'venv')
-    python -m venv venv
-    
-    # Activate the virtual environment:
-    # On Windows:
-    .\venv\Scripts\activate
-    # On macOS/Linux:
-    # source venv/bin/activate
-    ```
-
-3.  **Install FFmpeg:**
+3. **Install FFmpeg:**
     The system uses FFmpeg for audio playback. Install it via winget:
     ```bash
     winget install ffmpeg
     ```
 
-4.  **Install dependencies:**
+4. **Install dependencies:**
     Install all required Python packages using the `requirements.txt` file.
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **NVDA Controller Client DLL (for direct NVDA integration):**
+5. **NVDA Controller Client DLL (for direct NVDA integration):**
     If you intend to use the direct NVDA integration feature, follow these steps:
     a. Download the appropriate DLL file: `nvdaControllerClient64.dll` (for 64-bit Python) or `nvdaControllerClient32.dll` (for 32-bit Python) from the [NVDA GitHub Repository extras page](https://github.com/nvaccess/nvda/tree/master/extras/controllerClient).
     b. Copy the downloaded DLL file into the main project directory (the same folder where `desktop.py` is located).
