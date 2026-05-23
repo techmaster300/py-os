@@ -1,5 +1,4 @@
 import wx
-import os
 from api import BlindApp
 
 class HelpApp(BlindApp):
@@ -44,8 +43,19 @@ class HelpApp(BlindApp):
             )
         }
 
+        # Add dynamic topics from other apps' terminal commands
+        for loaded_app in getattr(self.api.desktop, 'apps', []):
+            if loaded_app.name != self.name:
+                cmds = loaded_app.get_terminal_commands()
+                if cmds:
+                    key = f"Terminal Commands: {loaded_app.name}"
+                    text = f"{loaded_app.name} terminal commands:\n"
+                    for cmd, desc in cmds.items():
+                        text += f"  {cmd}: {desc}\n"
+                    self.topics[key] = text
+
     def run(self):
-        self.frame = wx.Frame(None, title="Help and Documentation", size=(600, 500))
+        self._create_frame("Help and Documentation", (600, 500))
         panel = wx.Panel(self.frame)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         
@@ -75,10 +85,9 @@ class HelpApp(BlindApp):
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_read)
         read_btn.Bind(wx.EVT_BUTTON, self.on_read)
         self.list.Bind(wx.EVT_LISTBOX, self.on_select)
-        self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         
-        self.frame.Show()
         self.api.speak("Help Center opened. Select a topic to read.")
+        self._show_app(self.list)
         self.list.SetFocus()
 
     def on_select(self, event):

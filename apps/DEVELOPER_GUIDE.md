@@ -51,5 +51,8 @@ For applications needing to interact with the host file system (e.g., reading/wr
 ## 6. Text Editor App
 A basic `TextEditorApp` is available for creating and editing text files. It can be launched via the application menu.
 
-## 7. Notifications
-Applications can now send notifications using `self.api.notify(title, message, level='info')`. This currently triggers a spoken notification. The `level` parameter can be used to indicate the severity ('info', 'warning', 'error'). Future enhancements may include visual notifications.
+## 8. Best Practices for Accessibility and Performance
+- **Keyboard Navigation:** Always provide keyboard shortcuts for main actions using `wx.AcceleratorTable`. Ensure all interactive elements can be reached via keyboard.
+- **Asynchronous Operations:** Use `threading` for long-running tasks (e.g., file loading, AI requests) to keep the UI responsive. Use `wx.CallAfter` to safely update the UI from background threads.
+- **Accessibility-First Feedback:** Always use `self.api.speak()` to provide immediate feedback for user actions. Status labels should be clear and descriptive for screen reader users.
+- **Theming:** Use `self.api.play_sound()` to provide consistent audio cues for actions like 'launch', 'close', and 'alert'.

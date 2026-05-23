@@ -69,13 +69,22 @@ def list_output_devices():
             results.append({"index": idx, "name": name})
     return results
 
+def is_device_valid(device_index):
+    """Checks if a device index is currently valid."""
+    if not HAS_SOUNDDEVICE:
+        return False
+    try:
+        devices = sd.query_devices()
+        return 0 <= device_index < len(devices)
+    except Exception:
+        return False
 
 def resolve_selected_index(entries, config, index_key, name_key):
     cfg_index = config.get(index_key)
-    if isinstance(cfg_index, int):
-        for e in entries:
-            if e["index"] == cfg_index:
-                return cfg_index
+    # Check if index is still valid
+    if isinstance(cfg_index, int) and is_device_valid(cfg_index):
+        return cfg_index
+    
     cfg_name = config.get(name_key)
     if isinstance(cfg_name, str):
         for e in entries:

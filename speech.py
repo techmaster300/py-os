@@ -6,6 +6,7 @@ import queue
 import time
 from comtypes.client import CreateObject
 from comtypes.gen import SpeechLib
+import audio_devices
 
 class SpeechEngine:
     def __init__(self):
@@ -47,7 +48,26 @@ class SpeechEngine:
         self.sapi_engine = None
         if self.mode != "nvda":
             self.sapi_engine = CreateObject("SAPI.SpVoice")
+            self._apply_sapi_device()
             self._apply_rate()
+
+    def _apply_sapi_device(self):
+        """Routes SAPI output to the configured audio device."""
+        if not self.sapi_engine: return
+        
+        config = audio_devices.load_device_config(self.config_dir)
+        device_name = config.get("output_device")
+        
+        if device_name:
+            # SAPI devices are often identified by category/token
+            try:
+                # Iterate through audio outputs to match the selected device name
+                for token in self.sapi_engine.GetAudioOutputs():
+                    if token.GetDescription() == device_name:
+                        self.sapi_engine.AudioOutput = token
+                        break
+            except Exception as e:
+                print(f"Could not route SAPI to {device_name}: {e}")
 
     def _apply_rate(self):
         """Map 50-400 to SAPI -10 to 10."""

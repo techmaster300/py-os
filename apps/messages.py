@@ -1,139 +1,174 @@
 import wx
 import socket
+import json
+from datetime import datetime
 from api import BlindApp
 
 class MessagesApp(BlindApp):
     def __init__(self, api):
         super().__init__(api)
-        self.name = "Messages"
-        self.description = "Send and receive text messages over the network."
-        self.help_text = "Tab to navigate. Enter IP address in 'To' field, type message in 'Message' field, and press Enter or Click Send."
-        self.docs = "This app uses the system-wide Message Service on port 3030. Messages are announced even when this app is closed."
+        self.name = "Master-Chat"
+        self.description = "Send and receive messages with timestamps."
+        self.help_text = "Register or login with a username, then chat. Disconnect to log out."
+        self.listening = False
+        self.username = None
+        self.logged_in = False
+        self.all_messages = []
+        self._tick_interval = 500
 
     def run(self):
-        self.frame = wx.Frame(None, title="Messages", size=(500, 600))
+        self._create_frame(title="Master-Chat", size=(500, 600))
         panel = wx.Panel(self.frame)
-        panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # --- Recipient Config ---
-        target_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        lbl = wx.StaticText(panel, label="To IP Address:")
-        lbl.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.ip_input = wx.TextCtrl(panel, value="127.0.0.1")
-        self.ip_input.SetBackgroundColour(wx.Colour(30, 30, 30))
-        self.ip_input.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.ip_input.SetHelpText("Enter the IP address of the recipient.")
-        
-        target_sizer.Add(lbl, 0, wx.ALL | wx.CENTER, 5)
-        target_sizer.Add(self.ip_input, 1, wx.EXPAND | wx.ALL, 5)
-        main_sizer.Add(target_sizer, 0, wx.EXPAND | wx.ALL, 5)
-        
-        # --- Message History ---
-        history_lbl = wx.StaticText(panel, label="Message History:")
-        history_lbl.SetForegroundColour(wx.Colour(200, 200, 200))
-        main_sizer.Add(history_lbl, 0, wx.LEFT | wx.TOP, 10)
+        sizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.msg_list = wx.ListBox(panel, style=wx.LB_SINGLE)
-        self.msg_list.SetBackgroundColour(wx.Colour(20, 20, 20))
-        self.msg_list.SetForegroundColour(wx.Colour(0, 255, 0))
-        self.msg_list.SetHelpText("List of sent and received messages.")
-        main_sizer.Add(self.msg_list, 1, wx.EXPAND | wx.ALL, 10)
-        
-        # --- Send Box ---
-        msg_lbl = wx.StaticText(panel, label="Type Message:")
-        msg_lbl.SetForegroundColour(wx.Colour(200, 200, 200))
-        main_sizer.Add(msg_lbl, 0, wx.LEFT, 10)
+        filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        filter_sizer.Add(wx.StaticText(panel, label="Filter by user:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        self.filter_input = wx.TextCtrl(panel)
+        self.filter_input.SetHint("Username filter")
+        self.filter_input.Bind(wx.EVT_TEXT, self.on_filter)
+        filter_sizer.Add(self.filter_input, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(filter_sizer, 0, wx.EXPAND)
 
-        self.send_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.send_input.SetBackgroundColour(wx.Colour(30, 30, 30))
-        self.send_input.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.send_input.SetHelpText("Type your message here and press Enter to send.")
-        main_sizer.Add(self.send_input, 0, wx.EXPAND | wx.ALL, 10)
-        
+        auth_sizer = wx.BoxSizer(wx.VERTICAL)
+        auth_sizer.Add(wx.StaticText(panel, label="Enter Username:"), 0, wx.ALL, 5)
+        self.username_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.username_input.SetHint("Username")
+        auth_sizer.Add(self.username_input, 1, wx.EXPAND | wx.ALL, 5)
+
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.send_btn = wx.Button(panel, label="Send Message")
-        btn_sizer.Add(self.send_btn, 1, wx.ALL, 5)
-        main_sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 5)
-        
-        panel.SetSizer(main_sizer)
-        
-        # Bindings
+        reg_btn = wx.Button(panel, label="Register")
+        reg_btn.Bind(wx.EVT_BUTTON, self.on_register)
+        btn_sizer.Add(reg_btn, 0, wx.ALL, 5)
+
+        login_btn = wx.Button(panel, label="Login")
+        login_btn.Bind(wx.EVT_BUTTON, self.on_login)
+        btn_sizer.Add(login_btn, 0, wx.ALL, 5)
+
+        disconnect_btn = wx.Button(panel, label="Disconnect")
+        disconnect_btn.Bind(wx.EVT_BUTTON, self.on_logout)
+        btn_sizer.Add(disconnect_btn, 0, wx.ALL, 5)
+        auth_sizer.Add(btn_sizer, 0, wx.EXPAND)
+
+        sizer.Add(auth_sizer, 0, wx.EXPAND | wx.ALL, 5)
+
+        sizer.Add(wx.StaticText(panel, label="Message History:"), 0, wx.LEFT, 10)
+        self.msg_list = wx.ListBox(panel)
+        sizer.Add(self.msg_list, 1, wx.EXPAND | wx.ALL, 10)
+
+        sizer.Add(wx.StaticText(panel, label="Type Message:"), 0, wx.LEFT, 10)
+        self.send_input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.send_input.SetHint("Message")
+        self.send_input.Disable()
+        sizer.Add(self.send_input, 0, wx.EXPAND | wx.ALL, 10)
         self.send_input.Bind(wx.EVT_TEXT_ENTER, self.on_send)
-        self.send_btn.Bind(wx.EVT_BUTTON, self.on_send)
-        self.msg_list.Bind(wx.EVT_LISTBOX, self.on_item_focused)
-        self.frame.Bind(wx.EVT_CLOSE, self.on_close)
-        
-        # Load history and subscribe
-        for msg in self.api.message_service.history:
-            self.msg_list.Append(msg)
-        
-        self.api.message_service.subscribe(self.add_message)
-        
-        self.frame.Show()
-        self.api.speak("Messages app opened. All incoming messages will be announced.")
-        self.send_input.SetFocus()
+
+        self.status_label = wx.StaticText(panel, label="Not connected")
+        sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 5)
+
+        panel.SetSizer(sizer)
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(('', 0))
+        self.sock.setblocking(0)
+        self.listening = True
+        self.api.speak("Messaging app opened. Register or login.")
+        self._show_app(self.username_input)
+
+    def timestamp(self):
+        return datetime.now().strftime("%H:%M")
+
+    def on_register(self, event):
+        user = self.username_input.GetValue().strip()
+        if not user:
+            self.alert("Enter a username first.", "Input Required")
+            return
+        payload = json.dumps({"command": "create", "username": user})
+        try:
+            self.sock.sendto(payload.encode(), ('127.0.0.1', 3030))
+            self.api.speak(f"Registering {user}...")
+        except Exception:
+            self.alert("Cannot reach server.", "Connection Error")
+
+    def on_login(self, event):
+        user = self.username_input.GetValue().strip()
+        if not user:
+            self.alert("Enter a username first.", "Input Required")
+            return
+        self.username = user
+        payload = json.dumps({"command": "login", "username": user})
+        try:
+            self.sock.sendto(payload.encode(), ('127.0.0.1', 3030))
+            self.send_input.Enable()
+            self.logged_in = True
+            self.status_label.SetLabel(f"Logged in as {user}")
+            self.api.speak(f"Logged in as {user}")
+        except Exception:
+            self.alert("Cannot reach server.", "Connection Error")
+
+    def on_logout(self, event):
+        if self.logged_in:
+            self.logged_in = False
+            self.username = None
+            self.send_input.Disable()
+            self.status_label.SetLabel("Disconnected")
+            self.api.speak("Disconnected.")
+        else:
+            self.api.speak("Not logged in.")
+
+    def on_tick(self):
+        if not self.listening:
+            return
+        try:
+            data, _ = self.sock.recvfrom(1024)
+            msg = json.loads(data.decode())
+            ts = self.timestamp()
+            formatted = f"[{ts}] {msg['user']}: {msg['text']}"
+            self.add_message(formatted)
+            self.api.speak(f"{msg['user']} says: {msg['text']}")
+        except socket.error:
+            pass
+        except Exception:
+            pass
 
     def add_message(self, text):
-        if self.msg_list:
-            self.msg_list.Append(text)
+        self.all_messages.append(text)
+        self._refresh_filter()
+
+    def _refresh_filter(self):
+        filter_text = self.filter_input.GetValue().strip().lower()
+        self.msg_list.Clear()
+        if not filter_text:
+            for m in self.all_messages:
+                self.msg_list.Append(m)
+        else:
+            for m in self.all_messages:
+                if filter_text in m.lower():
+                    self.msg_list.Append(m)
+        if self.msg_list.GetCount() > 0:
             self.msg_list.SetSelection(self.msg_list.GetCount() - 1)
 
+    def on_filter(self, event):
+        self._refresh_filter()
+
     def on_send(self, event):
-        target_ip = self.ip_input.GetValue().strip()
-        message = self.send_input.GetValue().strip()
-        
-        if not message:
+        if not self.logged_in:
+            self.alert("Login first.", "Not Logged In")
             return
-            
+        text = self.send_input.GetValue().strip()
+        if not text:
+            return
+        payload = json.dumps({"command": "message", "text": text})
         try:
-            client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            client_socket.sendto(message.encode('utf-8'), (target_ip, self.api.message_service.port))
-            formatted = f"To {target_ip}: {message}"
-            self.api.message_service.history.append(formatted)
-            self.add_message(formatted)
-            self.api.speak(f"Message sent to {target_ip}")
+            self.sock.sendto(payload.encode(), ('127.0.0.1', 3030))
             self.send_input.Clear()
-        except Exception as e:
-            self.api.speak(f"Failed to send: {e}")
-
-    def get_terminal_commands(self):
-        return {
-            "send <ip> <message>": "Send a message to an IP address.",
-            "list": "List recent messages."
-        }
-
-    def terminal_input(self, command):
-        parts = command.split(maxsplit=2)
-        if not parts: return
-        action = parts[0].lower()
-        
-        if action == "send":
-            if len(parts) >= 3:
-                target_ip = parts[1]
-                message = parts[2]
-                try:
-                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    client_socket.sendto(message.encode('utf-8'), (target_ip, self.api.message_service.port))
-                    formatted = f"To {target_ip}: {message}"
-                    self.api.message_service.history.append(formatted)
-                    self.add_message(formatted)
-                    self.api.terminal_output(f"Sent: {formatted}")
-                    self.api.speak(f"Message sent to {target_ip}")
-                except Exception as e:
-                    self.api.terminal_output(f"Error sending message: {e}")
-            else:
-                self.api.terminal_output("Usage: send <ip> <message>")
-        elif action == "list":
-            for msg in self.api.message_service.history:
-                self.api.terminal_output(msg)
-        else:
-            self.api.terminal_output("Unknown command. Available: send, list")
+        except Exception:
+            self.alert("Failed to send. Check connection.", "Send Error")
 
     def on_close(self, event=None):
-        self.api.message_service.unsubscribe(self.add_message)
-        if self.frame:
-            self.frame.Destroy()
-        self.api.sounds.play("close")
-        self.api.desktop.on_app_closed(self)
+        self.listening = False
+        self.logged_in = False
+        try:
+            self.sock.close()
+        except Exception:
+            pass
+        super().on_close(event)

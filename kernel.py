@@ -3,6 +3,7 @@ import datetime
 import json
 import subprocess
 import threading
+import queue
 
 class VirtualOS:
     def __init__(self, root_dir="vfs"):
@@ -10,10 +11,10 @@ class VirtualOS:
         self.cwd = "/"
         self.shell_proc = None
         self.shell_type = None
+        self.output_queue = queue.Queue()
         self.output_callback = None
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)
-            # Create some default files
             self._create_default_files()
 
     def _create_default_files(self):
@@ -40,19 +41,22 @@ class VirtualOS:
         return final_path
 
     def _shell_reader(self):
-        while self.shell_proc:
+        while self.shell_proc and self.shell_proc.poll() is None:
             try:
                 line = self.shell_proc.stdout.readline()
-                if not line:
-                    break
-                if self.output_callback:
-                    self.output_callback(line.rstrip())
+                if line:
+                    self.output_queue.put(line.rstrip())
             except Exception:
                 break
         self.shell_proc = None
         self.shell_type = None
         if self.output_callback:
             self.output_callback("Windows Shell session ended.")
+
+    def process_shell_output(self):
+        while not self.output_queue.empty():
+            if self.output_callback:
+                self.output_callback(self.output_queue.get())
 
     def execute(self, command_str):
         if self.shell_proc:

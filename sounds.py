@@ -15,14 +15,10 @@ except ImportError:
 
 class SoundManager:
     def __init__(self, data_dir):
-        # Normalize the path initially
         self.data_dir = os.path.normpath(data_dir)
-        print(f"Normalized data_dir: {repr(self.data_dir)}")
-
-        # Paths for configuration and custom themes
         self.config_path = os.path.join(self.data_dir, "sound_theme.json")
         self.custom_themes_dir = os.path.join(self.data_dir, "themes")
-        print(f"Custom themes directory: {repr(self.custom_themes_dir)}")
+        self.volume = 1.0
 
         # Default themes are hardcoded
         self.default_themes = {
@@ -48,14 +44,29 @@ class SoundManager:
                 "alert": [(1000, 500)]
             }
         }
+        
         self.themes = self.default_themes.copy()
-
-        # Load custom themes and merge them
         custom_themes_data = self._load_all_custom_themes()
         self.themes.update(custom_themes_data)
-
         self.current_theme = self.load_theme_name()
+        
+        # Improved cache
         self._audio_cache = {}
+        # Preload essential sounds
+        self.preload_sounds(["nav", "launch", "close", "alert"])
+
+    def set_volume(self, volume):
+        self.volume = max(0.0, min(1.0, float(volume)))
+
+    def preload_sounds(self, sound_types):
+        """Preload commonly used sounds into the cache."""
+        theme_data = self.themes.get(self.current_theme, self.themes["Modern"])
+        for st in sound_types:
+            data = theme_data.get(st)
+            if isinstance(data, str):
+                self._get_cached_audio(data)
+
+    # ... (rest of the class)
 
     def _load_all_custom_themes(self):
         """Loads all custom themes from the theme directory."""
