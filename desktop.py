@@ -92,6 +92,10 @@ class DesktopFrame(wx.Frame):
         self.auto_lock_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_auto_lock_check, self.auto_lock_timer)
         self.auto_lock_timer.Start(30000)
+        self.ctrl_hold_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_ctrl_hold, self.ctrl_hold_timer)
+        self.Bind(wx.EVT_KEY_UP, self._on_key_up)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_ACTIVATE, self.on_activity)
         wx.CallAfter(self.check_lock)
         wx.CallAfter(self.greet)
@@ -103,7 +107,11 @@ class DesktopFrame(wx.Frame):
             self.show_help()
         elif event.ControlDown() and keycode == ord('D'):
             self.show_docs()
+        elif keycode == wx.WXK_CONTROL:
+            if not self.ctrl_hold_timer.IsRunning():
+                self.ctrl_hold_timer.Start(5000, wx.TIMER_ONE_SHOT)
         else:
+            self.ctrl_hold_timer.Stop()
             event.Skip()
 
     def show_help(self):
@@ -119,6 +127,46 @@ class DesktopFrame(wx.Frame):
         else:
             msg = translation._("desktop.docs")
         self.api.speak(msg)
+
+    def _on_key_up(self, event):
+        if event.GetKeyCode() == wx.WXK_CONTROL:
+            self.ctrl_hold_timer.Stop()
+        event.Skip()
+
+    def _on_ctrl_hold(self, event):
+        self._show_ctrl_menu()
+
+    def _show_ctrl_menu(self):
+        menu = wx.Menu()
+        menu.Append(5011, "Lock Screen")
+        menu.AppendSeparator()
+        menu.Append(5012, "Restart")
+        menu.Append(5013, "Shutdown")
+        self.Bind(wx.EVT_MENU, self._on_ctrl_menu_item)
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def _on_ctrl_menu_item(self, event):
+        id_ = event.GetId()
+        if id_ == 5011:
+            config = load_lock_config(self.data_dir)
+            if config.get("enabled"):
+                dlg = LockScreen(self, self.data_dir)
+                dlg.ShowModal()
+            else:
+                self.api.speak("No lock screen configured.")
+        elif id_ == 5012:
+            import sys, subprocess
+            subprocess.Popen([sys.executable, __file__])
+            self._allow_close = True
+            self.Close()
+        elif id_ == 5013:
+            self._allow_close = True
+            self.Close()
+
+    def _on_close(self, event):
+        if not getattr(self, '_allow_close', False):
+            event.Veto()
 
     def on_activity(self, event=None):
         self.last_activity = time.time()
@@ -234,12 +282,8 @@ class DesktopFrame(wx.Frame):
             print(f"Error in focus speech: {e}")
 
     def nav_back(self):
-        if self.active_app:
-            try:
-                if self.active_app.frame:
-                    self.active_app.frame.Close()
-            except Exception:
-                pass
+        if self.active_app and self.active_app.frame:
+            self.active_app.close_app()
             self.active_app = None
             if self.app_buttons:
                 self.app_buttons[0].SetFocus()
@@ -289,7 +333,7 @@ class DesktopFrame(wx.Frame):
         if self.active_app:
             try:
                 if self.active_app.frame:
-                    self.active_app.frame.Close()
+                    self.active_app.close_app()
             except Exception:
                 pass
             self.active_app = None
