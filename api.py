@@ -181,9 +181,6 @@ class BlindApp:
         return getattr(self, '_dirty', False)
 
     def on_close(self, event=None):
-        if event and not getattr(self, '_allow_close', False):
-            event.Veto()
-            return
         if self.confirm_close and self.is_dirty():
             if not self.confirm(_("app.unsaved_changes", "You have unsaved changes. Close anyway?"), _("common.confirm")):
                 if event:

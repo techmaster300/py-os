@@ -96,27 +96,38 @@ class DesktopFrame(wx.Frame):
         self.auto_lock_timer.Start(30000)
         self.ctrl_hold_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_ctrl_hold, self.ctrl_hold_timer)
+        self.lock_check_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._check_lock_keys, self.lock_check_timer)
+        self.lock_check_timer.Start(300)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_ACTIVATE, self.on_activity)
         self.Bind(wx.EVT_MENU_HIGHLIGHT_ALL, self._on_menu_highlight)
         self._menu_open = False
-        wx.CallAfter(self.check_lock)
         wx.CallAfter(self.greet)
 
     def on_key_down(self, event):
         self.on_activity()
         keycode = event.GetKeyCode()
+        if event.ControlDown():
+            if keycode == wx.WXK_LEFT:
+                self.nav_back(); return
+            elif keycode == wx.WXK_RIGHT:
+                self.nav_overview(); return
+            elif keycode == wx.WXK_DOWN:
+                self.nav_home(); return
+            elif keycode == wx.WXK_UP:
+                self.nav_notifications(); return
+            elif keycode == ord('D'):
+                self.show_docs(); return
+            elif keycode != wx.WXK_CONTROL:
+                event.Skip(); return
         if keycode == wx.WXK_F1:
             self.show_help()
-        elif event.ControlDown() and keycode == ord('D'):
-            self.show_docs()
         elif keycode == wx.WXK_CONTROL:
             if not self.ctrl_hold_timer.IsRunning():
                 self.ctrl_hold_timer.Start(3000, wx.TIMER_ONE_SHOT)
-        elif not event.ControlDown():
-            self.ctrl_hold_timer.Stop()
-            event.Skip()
         else:
+            self.ctrl_hold_timer.Stop()
             event.Skip()
 
     def _on_menu_highlight(self, event):
@@ -238,23 +249,34 @@ class DesktopFrame(wx.Frame):
         if minutes > 0 and config.get("enabled"):
             elapsed = (time.time() - self.last_activity) / 60
             if elapsed >= minutes:
-                self.show_lock_screen()
+                self.lock_system()
+
+    def _check_lock_keys(self, event):
+        import ctypes
+        VK_MENU = 0x12
+        VK_SHIFT = 0x10
+        alt_down = (ctypes.windll.user32.GetAsyncKeyState(VK_MENU) >> 15) & 1
+        shift_down = (ctypes.windll.user32.GetAsyncKeyState(VK_SHIFT) >> 15) & 1
+        if alt_down and shift_down:
+            config = load_lock_config(self.data_dir)
+            if config.get("hash"):
+                self.lock_check_timer.Stop()
+                self.lock_system()
+
+    def lock_system(self):
+        self.api.play_sound("logoff")
+        self.show_lock_screen()
+        if not self.lock_check_timer.IsRunning():
+            self.lock_check_timer.Start(300)
 
     def show_lock_screen(self):
-        dlg = LockScreen(self, self.data_dir)
+        dlg = LockScreen(self, self.data_dir, sounds=self.sound_manager)
         dlg.ShowModal()
         if dlg.unlocked:
             self.last_activity = time.time()
         else:
             self.Close()
-
-    def check_lock(self):
-        config = load_lock_config(self.data_dir)
-        if config.get("enabled"):
-            dlg = LockScreen(self, self.data_dir)
-            dlg.ShowModal()
-            if not dlg.unlocked:
-                self.Close()
+        dlg.Destroy()
 
     def greet(self):
         msg = getattr(self, 'appearance_config', {}).get("desktop_greeting", translation._("desktop.greeting"))

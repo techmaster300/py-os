@@ -20,7 +20,7 @@ class ThemeCreatorApp(BlindApp):
         self.btn = None
         self.step = "theme_name"
         self.current_event_index = 0
-        self.events = ["startup", "nav", "alert", "launch", "close", "alarm", "timer", "shutdown", "power_menu", "context_menu"]
+        self.events = ["startup", "nav", "launch", "close", "alert", "shutdown", "power_menu", "context_menu", "notify", "logon", "logoff", "error", "alarm", "timer", "info", "complete", "device_connect", "device_disconnect"]
         self.new_theme = {}
         self.theme_name = ""
         self.current_event = ""

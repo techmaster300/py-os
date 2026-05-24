@@ -3,9 +3,19 @@ import threading
 import json
 import os
 import time
-import numpy as np
-import soundfile as sf
 import audio_devices
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
 
 try:
     import sounddevice as sd
@@ -30,7 +40,17 @@ class SoundManager:
                 "alert": [(1000, 200), (800, 200)],
                 "shutdown": [(659, 200), (523, 200), (392, 300)],
                 "power_menu": [(440, 80)],
-                "context_menu": [(400, 50)]
+                "context_menu": [(400, 50)],
+                "notify": [(698, 100), (880, 100)],
+                "logon": [(523, 200), (659, 200), (784, 300)],
+                "logoff": [(784, 200), (659, 200), (523, 300)],
+                "error": [(1000, 400), (800, 400)],
+                "alarm": [(1000, 100), (0, 100), (1000, 100), (0, 100)],
+                "timer": [(880, 80)],
+                "info": [(523, 100)],
+                "complete": [(523, 100), (659, 100), (784, 200)],
+                "device_connect": [(440, 80), (659, 80)],
+                "device_disconnect": [(659, 80), (440, 80)]
             },
             "Retro": {
                 "startup": [(100, 100), (200, 100), (300, 100)],
@@ -40,7 +60,17 @@ class SoundManager:
                 "alert": [(400, 100), (400, 100), (400, 100)],
                 "shutdown": [(300, 100), (200, 100), (100, 200)],
                 "power_menu": [(200, 30)],
-                "context_menu": [(150, 20)]
+                "context_menu": [(150, 20)],
+                "notify": [(300, 50), (400, 50)],
+                "logon": [(200, 80), (300, 80), (400, 100)],
+                "logoff": [(400, 80), (300, 80), (200, 100)],
+                "error": [(500, 100), (500, 100)],
+                "alarm": [(600, 60), (0, 60), (600, 60), (0, 60)],
+                "timer": [(300, 40)],
+                "info": [(400, 50)],
+                "complete": [(300, 60), (400, 60), (500, 100)],
+                "device_connect": [(300, 50), (500, 50)],
+                "device_disconnect": [(500, 50), (300, 50)]
             },
             "Classic": {
                 "startup": [(523, 400)],
@@ -50,7 +80,17 @@ class SoundManager:
                 "alert": [(1000, 500)],
                 "shutdown": [(392, 300)],
                 "power_menu": [(400, 50)],
-                "context_menu": [(440, 30)]
+                "context_menu": [(440, 30)],
+                "notify": [(440, 60), (659, 60)],
+                "logon": [(523, 300)],
+                "logoff": [(392, 300)],
+                "error": [(800, 600)],
+                "alarm": [(1000, 80), (0, 80), (1000, 80)],
+                "timer": [(659, 50)],
+                "info": [(659, 60)],
+                "complete": [(523, 100), (659, 100), (784, 200)],
+                "device_connect": [(440, 60), (659, 60)],
+                "device_disconnect": [(659, 60), (440, 60)]
             },
             "Windows XP": {}
         }
@@ -62,11 +102,21 @@ class SoundManager:
                 "startup": os.path.join(xp_dir, "Windows XP Startup.wav"),
                 "nav": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
                 "launch": os.path.join(xp_dir, "Windows XP Default.wav"),
-                "close": os.path.join(xp_dir, "Windows XP Minimize.wav"),
-                "alert": os.path.join(xp_dir, "Windows XP Error.wav"),
+                "close": os.path.join(xp_dir, "Windows XP Recycle.wav"),
+                "alert": os.path.join(xp_dir, "Windows XP Exclamation.wav"),
                 "shutdown": os.path.join(xp_dir, "Windows XP Shutdown.wav"),
                 "power_menu": os.path.join(xp_dir, "Windows XP Start.wav"),
-                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav")
+                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
+                "notify": os.path.join(xp_dir, "Windows XP Notify.wav"),
+                "logon": os.path.join(xp_dir, "Windows XP Logon Sound.wav"),
+                "logoff": os.path.join(xp_dir, "Windows XP Logoff Sound.wav"),
+                "error": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
+                "alarm": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
+                "timer": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
+                "info": os.path.join(xp_dir, "Windows XP Information Bar.wav"),
+                "complete": os.path.join(xp_dir, "tada.wav"),
+                "device_connect": os.path.join(xp_dir, "Windows XP Hardware Insert.wav"),
+                "device_disconnect": os.path.join(xp_dir, "Windows XP Hardware Remove.wav")
             }
 
         self.themes = self.default_themes.copy()
@@ -76,8 +126,11 @@ class SoundManager:
         
         # Improved cache
         self._audio_cache = {}
-        # Preload essential sounds
-        self.preload_sounds(["nav", "launch", "close", "alert"])
+        # Preload essential sounds (best-effort, non-fatal)
+        try:
+            self.preload_sounds(["nav", "launch", "close", "alert"])
+        except Exception:
+            pass
 
         # Whether to force ffplay (for debugging/custom setups)
         self._use_ffmpeg = self._load_ffmpeg_flag()
@@ -259,7 +312,7 @@ class SoundManager:
         )
 
     def _play_notes_with_sounddevice(self, notes):
-        if not HAS_SOUNDDEVICE or not notes:
+        if not HAS_SOUNDDEVICE or not HAS_NUMPY or not notes:
             return False
         try:
             sample_rate = 44100
@@ -272,6 +325,9 @@ class SoundManager:
             audio = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
             if audio.size == 0:
                 return False
+            # Add 300ms silence padding so tones don't feel cut off
+            pad_samples = int(sample_rate * 0.3)
+            audio = np.concatenate([audio, np.zeros(pad_samples, dtype=np.float32)])
             device_index = self._selected_output_device_index()
             sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
             return True
@@ -280,12 +336,16 @@ class SoundManager:
             return False
 
     def _play_file_with_sounddevice(self, path):
-        if not HAS_SOUNDDEVICE:
+        if not HAS_SOUNDDEVICE or not HAS_NUMPY:
             return False
         try:
             audio, sample_rate = self._get_cached_audio(path)
             if isinstance(audio, np.ndarray) and audio.size == 0:
                 return False
+            # Add 300ms silence padding so sounds don't feel cut off
+            pad_samples = int(sample_rate * 0.3)
+            pad_shape = (pad_samples, audio.shape[1]) if audio.ndim == 2 else (pad_samples,)
+            audio = np.concatenate([audio, np.zeros(pad_shape, dtype=np.float32)])
             device_index = self._selected_output_device_index()
             sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
             return True
@@ -294,6 +354,8 @@ class SoundManager:
             return False
 
     def _get_cached_audio(self, path):
+        if not HAS_SOUNDFILE or not HAS_NUMPY:
+            raise RuntimeError("soundfile and numpy required for file playback")
         abs_path = os.path.abspath(path)
         mtime = os.path.getmtime(abs_path)
         cached = self._audio_cache.get(abs_path)
