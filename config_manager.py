@@ -59,6 +59,8 @@ def load_appearance_config(data_dir):
         "lockscreen_mask_char": "*",
         "lockscreen_width": 350,
         "lockscreen_height": 460,
+        "wallpaper_path": "",
+        "wallpaper_style": "stretch",
     }
     if not os.path.exists(path):
         return defaults

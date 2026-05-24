@@ -27,12 +27,13 @@ def check(value, config):
     return _hash(value) == config.get("hash", "")
 
 class LockScreen(wx.Dialog):
-    def __init__(self, parent, data_dir):
+    def __init__(self, parent, data_dir, sounds=None):
         super().__init__(parent, title="PyOS", style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP)
         self.data_dir = data_dir
         self.config = load_config(data_dir)
         self.unlocked = False
         self.pin_buffer = ""
+        self.sounds = sounds
 
         ac = config_manager.load_appearance_config(data_dir)
         lock_bg = ac.get("lockscreen_bg", "#000000")
@@ -152,6 +153,8 @@ class LockScreen(wx.Dialog):
 
         if check(value, self.config):
             self.unlocked = True
+            if self.sounds:
+                self.sounds.play("logon")
             self.Close()
         else:
             self.status.SetLabel("Incorrect. Try again.")

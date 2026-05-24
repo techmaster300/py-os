@@ -4,6 +4,7 @@ import json
 import subprocess
 import threading
 import queue
+import shutil
 
 class VirtualOS:
     def __init__(self, root_dir="vfs"):
@@ -16,11 +17,31 @@ class VirtualOS:
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)
             self._create_default_files()
+        self._trash_dir = os.path.join(self.root_dir, ".trash")
+        if not os.path.exists(self._trash_dir):
+            os.makedirs(self._trash_dir)
 
     def _create_default_files(self):
         with open(os.path.join(self.root_dir, "welcome.txt"), "w") as f:
             f.write("Welcome to BlindOS. This is a safe environment for you to explore.")
         os.makedirs(os.path.join(self.root_dir, "documents"))
+
+    @property
+    def _trash_info_path(self):
+        return os.path.join(self._trash_dir, ".trash_info.json")
+
+    def _load_trash_info(self):
+        if os.path.exists(self._trash_info_path):
+            try:
+                with open(self._trash_info_path, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def _save_trash_info(self, info):
+        with open(self._trash_info_path, "w") as f:
+            json.dump(info, f, indent=2)
 
     def get_real_path(self, virtual_path):
         # Ensure we're working with a normalized virtual path
@@ -77,7 +98,7 @@ class VirtualOS:
         args = parts[1:]
 
         if cmd == "help":
-            return "Available commands: list, open, create, delete, where, time, exit, shutdown, reboot, winshell."
+            return "Available commands: list, open, create, delete, delete_permanent, list_trash, restore, empty_trash, where, time, exit, shutdown, reboot, winshell."
         
         elif cmd == "list":
             real_path = self.get_real_path(self.cwd)
@@ -125,17 +146,87 @@ class VirtualOS:
                 return "Please specify a file name to delete."
             file_name = args[0]
             real_path = self.get_real_path(file_name)
-            if os.path.exists(real_path):
-                if os.path.isdir(real_path):
-                    try:
-                        os.rmdir(real_path)
-                    except OSError:
-                        return f"Failed to delete {file_name}. Directory might not be empty."
-                else:
-                    os.remove(real_path)
-                return f"Deleted {file_name}."
-            else:
+            if not os.path.exists(real_path):
                 return f"Item {file_name} not found."
+            # Move to trash
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            trash_name = f"{ts}_{os.path.basename(real_path)}"
+            trash_path = os.path.join(self._trash_dir, trash_name)
+            shutil.move(real_path, trash_path)
+            info = self._load_trash_info()
+            info[trash_name] = {
+                "original_name": os.path.basename(file_name),
+                "original_path": os.path.relpath(real_path, self.root_dir),
+                "deleted_at": ts
+            }
+            self._save_trash_info(info)
+            return f"Moved {file_name} to Recycle Bin."
+
+        elif cmd == "delete_permanent":
+            if not args:
+                return "Please specify a file name to permanently delete."
+            file_name = args[0]
+            real_path = self.get_real_path(file_name)
+            if not os.path.exists(real_path):
+                return f"Item {file_name} not found."
+            if os.path.isdir(real_path):
+                shutil.rmtree(real_path)
+            else:
+                os.remove(real_path)
+            return f"Permanently deleted {file_name}."
+
+        elif cmd == "list_trash":
+            items = os.listdir(self._trash_dir)
+            info = self._load_trash_info()
+            trashed = [f for f in items if f != ".trash_info.json"]
+            if not trashed:
+                return "Recycle Bin is empty."
+            lines = ["Recycle Bin contents:"]
+            for f in trashed:
+                entry = info.get(f, {})
+                orig = entry.get("original_path", "unknown")
+                lines.append(f"  {f} (originally: {orig})")
+            return "\n".join(lines)
+
+        elif cmd == "restore":
+            if not args:
+                return "Please specify a file name to restore from Recycle Bin."
+            name = args[0]
+            trash_path = os.path.join(self._trash_dir, name)
+            if not os.path.exists(trash_path):
+                # Try finding by original name
+                info = self._load_trash_info()
+                found = None
+                for k, v in info.items():
+                    if v.get("original_name") == name:
+                        found = k
+                        break
+                if found:
+                    trash_path = os.path.join(self._trash_dir, found)
+                    name = found
+                else:
+                    return f"Item {name} not found in Recycle Bin."
+            info = self._load_trash_info()
+            entry = info.get(name, {})
+            orig_rel = entry.get("original_path", name)
+            restore_path = os.path.join(self.root_dir, orig_rel)
+            os.makedirs(os.path.dirname(restore_path), exist_ok=True)
+            shutil.move(trash_path, restore_path)
+            info.pop(name, None)
+            self._save_trash_info(info)
+            return f"Restored {entry.get('original_name', name)}."
+
+        elif cmd == "empty_trash":
+            for item in os.listdir(self._trash_dir):
+                item_path = os.path.join(self._trash_dir, item)
+                if item == ".trash_info.json":
+                    continue
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+            self._save_trash_info({})
+            return "Recycle Bin emptied."
 
         elif cmd == "shutdown":
             if args and args[0] == "now":

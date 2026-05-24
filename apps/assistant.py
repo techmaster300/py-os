@@ -87,6 +87,7 @@ class AssistantApp(BlindApp):
 
         panel.SetSizer(sizer)
         self.input_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_ask)
+        self.key("Escape", self.on_close)
 
         for entry in self.conversation:
             role = entry.get("role", "user")

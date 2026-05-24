@@ -3,9 +3,44 @@ import threading
 import json
 import os
 import time
-import numpy as np
-import soundfile as sf
 import audio_devices
+from concurrent.futures import ThreadPoolExecutor
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
 
 try:
     import sounddevice as sd
@@ -30,7 +65,17 @@ class SoundManager:
                 "alert": [(1000, 200), (800, 200)],
                 "shutdown": [(659, 200), (523, 200), (392, 300)],
                 "power_menu": [(440, 80)],
-                "context_menu": [(400, 50)]
+                "context_menu": [(400, 50)],
+                "notify": [(698, 100), (880, 100)],
+                "logon": [(523, 200), (659, 200), (784, 300)],
+                "logoff": [(784, 200), (659, 200), (523, 300)],
+                "error": [(1000, 400), (800, 400)],
+                "alarm": [(1000, 100), (0, 100), (1000, 100), (0, 100)],
+                "timer": [(880, 80)],
+                "info": [(523, 100)],
+                "complete": [(523, 100), (659, 100), (784, 200)],
+                "device_connect": [(440, 80), (659, 80)],
+                "device_disconnect": [(659, 80), (440, 80)]
             },
             "Retro": {
                 "startup": [(100, 100), (200, 100), (300, 100)],
@@ -40,7 +85,17 @@ class SoundManager:
                 "alert": [(400, 100), (400, 100), (400, 100)],
                 "shutdown": [(300, 100), (200, 100), (100, 200)],
                 "power_menu": [(200, 30)],
-                "context_menu": [(150, 20)]
+                "context_menu": [(150, 20)],
+                "notify": [(300, 50), (400, 50)],
+                "logon": [(200, 80), (300, 80), (400, 100)],
+                "logoff": [(400, 80), (300, 80), (200, 100)],
+                "error": [(500, 100), (500, 100)],
+                "alarm": [(600, 60), (0, 60), (600, 60), (0, 60)],
+                "timer": [(300, 40)],
+                "info": [(400, 50)],
+                "complete": [(300, 60), (400, 60), (500, 100)],
+                "device_connect": [(300, 50), (500, 50)],
+                "device_disconnect": [(500, 50), (300, 50)]
             },
             "Classic": {
                 "startup": [(523, 400)],
@@ -50,7 +105,17 @@ class SoundManager:
                 "alert": [(1000, 500)],
                 "shutdown": [(392, 300)],
                 "power_menu": [(400, 50)],
-                "context_menu": [(440, 30)]
+                "context_menu": [(440, 30)],
+                "notify": [(440, 60), (659, 60)],
+                "logon": [(523, 300)],
+                "logoff": [(392, 300)],
+                "error": [(800, 600)],
+                "alarm": [(1000, 80), (0, 80), (1000, 80)],
+                "timer": [(659, 50)],
+                "info": [(659, 60)],
+                "complete": [(523, 100), (659, 100), (784, 200)],
+                "device_connect": [(440, 60), (659, 60)],
+                "device_disconnect": [(659, 60), (440, 60)]
             },
             "Windows XP": {}
         }
@@ -62,11 +127,21 @@ class SoundManager:
                 "startup": os.path.join(xp_dir, "Windows XP Startup.wav"),
                 "nav": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
                 "launch": os.path.join(xp_dir, "Windows XP Default.wav"),
-                "close": os.path.join(xp_dir, "Windows XP Minimize.wav"),
-                "alert": os.path.join(xp_dir, "Windows XP Error.wav"),
+                "close": os.path.join(xp_dir, "Windows XP Recycle.wav"),
+                "alert": os.path.join(xp_dir, "Windows XP Exclamation.wav"),
                 "shutdown": os.path.join(xp_dir, "Windows XP Shutdown.wav"),
                 "power_menu": os.path.join(xp_dir, "Windows XP Start.wav"),
-                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav")
+                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
+                "notify": os.path.join(xp_dir, "Windows XP Notify.wav"),
+                "logon": os.path.join(xp_dir, "Windows XP Logon Sound.wav"),
+                "logoff": os.path.join(xp_dir, "Windows XP Logoff Sound.wav"),
+                "error": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
+                "alarm": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
+                "timer": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
+                "info": os.path.join(xp_dir, "Windows XP Information Bar.wav"),
+                "complete": os.path.join(xp_dir, "tada.wav"),
+                "device_connect": os.path.join(xp_dir, "Windows XP Hardware Insert.wav"),
+                "device_disconnect": os.path.join(xp_dir, "Windows XP Hardware Remove.wav")
             }
 
         self.themes = self.default_themes.copy()
@@ -76,11 +151,15 @@ class SoundManager:
         
         # Improved cache
         self._audio_cache = {}
-        # Preload essential sounds
-        self.preload_sounds(["nav", "launch", "close", "alert"])
+        # Preload essential sounds (best-effort, non-fatal)
+        try:
+            self.preload_sounds(["nav", "launch", "close", "alert"])
+        except Exception:
+            pass
 
         # Whether to force ffplay (for debugging/custom setups)
         self._use_ffmpeg = self._load_ffmpeg_flag()
+        self._executor = ThreadPoolExecutor(max_workers=1)
 
     def set_volume(self, volume):
         self.volume = max(0.0, min(1.0, float(volume)))
@@ -188,9 +267,10 @@ class SoundManager:
 
         theme_data = self.themes.get(self.current_theme, self.themes["Modern"])
         data = theme_data.get(sound_type)
+        if not data:
+            data = self.default_themes.get("Modern", {}).get(sound_type)
         if not data: return
 
-        # Startup sound is synchronous
         if sound_type == "startup":
             if isinstance(data, str):
                 self._play_file_sync(data)
@@ -198,9 +278,15 @@ class SoundManager:
                 self._play_notes_sync(data)
         else:
             if isinstance(data, str):
-                threading.Thread(target=self._play_file, args=(data,), daemon=True).start()
+                self._executor.submit(self._play_file, data)
             else:
-                threading.Thread(target=self._play_notes, args=(data,), daemon=True).start()
+                self._executor.submit(self._play_notes, data)
+
+    def preview(self, data):
+        if isinstance(data, str):
+            self._play_file_sync(data)
+        else:
+            self._play_notes_sync(data)
 
     def _play_notes(self, notes):
         """Play a sequence of notes — sounddevice primary, ffplay fallback."""
@@ -225,7 +311,7 @@ class SoundManager:
         
         # Concat all sine waves and add a small pad
         inputs = "".join([f"[v{i}]" for i in range(len(notes))])
-        concat = f"{inputs}concat=n={len(notes)}:v=0:a=1,apad=pad_dur=0.3[out]"
+        concat = f"{inputs}concat=n={len(notes)}:v=0:a=1[out]"
         
         return ";".join(parts) + ";" + concat
 
@@ -235,8 +321,8 @@ class SoundManager:
                 return
             try:
                 clean_path = path.replace(os.sep, '/')
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["ffplay", "-nodisp", "-autoexit", clean_path], 
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing file: {e}")
 
@@ -246,7 +332,7 @@ class SoundManager:
                 return
             try:
                 clean_path = path.replace(os.sep, '/')
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
+                subprocess.run(["ffplay", "-nodisp", "-autoexit", clean_path], 
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing file sync: {e}")
@@ -259,7 +345,7 @@ class SoundManager:
         )
 
     def _play_notes_with_sounddevice(self, notes):
-        if not HAS_SOUNDDEVICE or not notes:
+        if not HAS_SOUNDDEVICE or not HAS_NUMPY or not notes:
             return False
         try:
             sample_rate = 44100
@@ -267,33 +353,47 @@ class SoundManager:
             for freq, dur in notes:
                 duration_seconds = max(dur, 1) / 1000.0
                 t = np.linspace(0, duration_seconds, int(sample_rate * duration_seconds), endpoint=False, dtype=np.float32)
-                wave = 0.20 * np.sin(2 * np.pi * float(freq) * t)
+                wave = self.volume * 0.20 * np.sin(2 * np.pi * float(freq) * t)
                 parts.append(wave)
             audio = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
             if audio.size == 0:
                 return False
+            # Add 300ms silence padding so tones don't feel cut off
+            pad_samples = int(sample_rate * 0.3)
+            audio = np.concatenate([audio, np.zeros(pad_samples, dtype=np.float32)])
             device_index = self._selected_output_device_index()
-            sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            try:
+                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            except Exception:
+                # Fall back once to system default output device.
+                sd.play(audio, samplerate=sample_rate, device=None, blocking=True)
             return True
         except Exception as e:
             print(f"Sounddevice notes playback failed, falling back to ffplay: {e}")
             return False
 
     def _play_file_with_sounddevice(self, path):
-        if not HAS_SOUNDDEVICE:
+        if not HAS_SOUNDDEVICE or not HAS_NUMPY:
             return False
         try:
             audio, sample_rate = self._get_cached_audio(path)
             if isinstance(audio, np.ndarray) and audio.size == 0:
                 return False
+            audio = audio * self.volume
             device_index = self._selected_output_device_index()
-            sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            try:
+                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+            except Exception:
+                # Fall back once to system default output device.
+                sd.play(audio, samplerate=sample_rate, device=None, blocking=True)
             return True
         except Exception as e:
             print(f"Sounddevice file playback failed, falling back to ffplay: {e}")
             return False
 
     def _get_cached_audio(self, path):
+        if not HAS_SOUNDFILE or not HAS_NUMPY:
+            raise RuntimeError("soundfile and numpy required for file playback")
         abs_path = os.path.abspath(path)
         mtime = os.path.getmtime(abs_path)
         cached = self._audio_cache.get(abs_path)
@@ -311,8 +411,8 @@ class SoundManager:
         filter_str = self._build_notes_filter(notes)
         if filter_str:
             try:
-                subprocess.run(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", filter_str],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-f", "lavfi", "-i", filter_str],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print(f"Error playing notes: {e}")
 

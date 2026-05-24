@@ -20,7 +20,7 @@ class ThemeCreatorApp(BlindApp):
         self.btn = None
         self.step = "theme_name"
         self.current_event_index = 0
-        self.events = ["startup", "nav", "alert", "launch", "close", "alarm", "timer", "shutdown", "power_menu", "context_menu"]
+        self.events = ["startup", "nav", "launch", "close", "alert", "shutdown", "power_menu", "context_menu", "notify", "logon", "logoff", "error", "alarm", "timer", "info", "complete", "device_connect", "device_disconnect"]
         self.new_theme = {}
         self.theme_name = ""
         self.current_event = ""
@@ -71,8 +71,13 @@ class ThemeCreatorApp(BlindApp):
         file_row.Add(self.browse_btn, 0)
         sizer.Add(file_row, 0, wx.EXPAND | wx.ALL, 8)
 
+        btn_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.test_btn = self.make_button(panel, "Test", self.on_test_sound, "Test Sound")
+        self.test_btn.Hide()
+        btn_row.Add(self.test_btn, 0, wx.RIGHT, 10)
         self.btn = self.make_button(panel, "Next", self.on_next, "Next")
-        sizer.Add(self.btn, 0, wx.ALL | wx.CENTER, 10)
+        btn_row.Add(self.btn, 0)
+        sizer.Add(btn_row, 0, wx.ALL | wx.CENTER, 10)
 
         self.theme_name_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
         self.freq_input.Bind(wx.EVT_TEXT_ENTER, self.on_next)
@@ -91,12 +96,13 @@ class ThemeCreatorApp(BlindApp):
             self.update_event_inputs()
 
     def update_event_inputs(self):
+        leave_focus = self.mode_choice.HasFocus()
         if self.sound_choice_mode == "tones":
             self.freq_input.Show()
             self.duration_input.Show()
             self.file_path_input.Hide()
             self.browse_btn.Hide()
-            if not self.freq_input.HasFocus() and not self.duration_input.HasFocus():
+            if not leave_focus:
                 self.freq_input.SetFocus()
             self.api.speak("Tone mode. Enter frequencies then durations.")
         else:
@@ -104,7 +110,7 @@ class ThemeCreatorApp(BlindApp):
             self.duration_input.Hide()
             self.file_path_input.Show()
             self.browse_btn.Show()
-            if not self.file_path_input.HasFocus():
+            if not leave_focus:
                 self.file_path_input.SetFocus()
             self.api.speak("File mode. Type a path or browse.")
         self.frame.Layout()
@@ -117,6 +123,7 @@ class ThemeCreatorApp(BlindApp):
         self.duration_input.Hide()
         self.file_path_input.Hide()
         self.browse_btn.Hide()
+        self.test_btn.Hide()
 
         if step == "theme_name":
             self.label.SetLabel("Enter name for new theme:")
@@ -126,6 +133,7 @@ class ThemeCreatorApp(BlindApp):
         elif step == "event":
             self.label.SetLabel(f"{self.current_event.capitalize()}: choose source and enter values.")
             self.mode_choice.Show()
+            self.test_btn.Show()
             self.mode_choice.SetFocus()
             self.update_event_inputs()
 
@@ -175,6 +183,26 @@ class ThemeCreatorApp(BlindApp):
             self.file_path_input.Clear()
             self.api.speak(f"{self.current_event.capitalize()} sound set to file.")
             self.advance_to_next_event()
+
+    def on_test_sound(self, event=None):
+        if self.step != "event":
+            return
+        selected = self.mode_choice.GetStringSelection().lower() or "tones"
+        if selected == "tones":
+            try:
+                tones = self.parse_tone_input(
+                    self.freq_input.GetValue().strip(),
+                    self.duration_input.GetValue().strip()
+                )
+                self.api.sounds.preview(tones)
+            except ValueError as e:
+                self.api.speak(f"Cannot test: {e}")
+        else:
+            path = self.file_path_input.GetValue().strip()
+            if path and os.path.exists(path):
+                self.api.sounds.preview(path)
+            else:
+                self.api.speak("Set a valid file path first.")
 
     def parse_int_list(self, raw_text, field_name):
         parts = [p.strip() for p in raw_text.split(",")]

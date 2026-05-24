@@ -18,6 +18,7 @@ class BlindApp:
         self.description = "Base application class"
         self.help_text = "No help available for this app."
         self.docs = "No documentation available."
+        self.hotkey = ""
         self.frame = None
         self._accel_entries = []
         self._tick_interval = 0
@@ -181,9 +182,6 @@ class BlindApp:
         return getattr(self, '_dirty', False)
 
     def on_close(self, event=None):
-        if event and not getattr(self, '_allow_close', False):
-            event.Veto()
-            return
         if self.confirm_close and self.is_dirty():
             if not self.confirm(_("app.unsaved_changes", "You have unsaved changes. Close anyway?"), _("common.confirm")):
                 if event:
