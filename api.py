@@ -314,6 +314,19 @@ class BlindApp:
         sep = wx.StaticLine(p, style=wx.LI_HORIZONTAL)
         sizer.Add(sep, 0, wx.EXPAND | wx.ALL, border)
 
+    def is_dev(self):
+        try:
+            return self.api.desktop.sys_config.get("developer_mode", False)
+        except Exception:
+            return False
+
+    def make_dev_setting(self, parent, label, name=""):
+        st = wx.StaticText(parent, label=label)
+        st.SetForegroundColour(wx.Colour(140, 140, 140))
+        if name:
+            st.SetName(name)
+        return st
+
     # ── Sizer shortcuts ───────────────────────────────────────────────────
 
     @staticmethod

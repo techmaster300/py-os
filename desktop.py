@@ -94,7 +94,6 @@ class DesktopFrame(wx.Frame):
         self.auto_lock_timer.Start(30000)
         self.ctrl_hold_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_ctrl_hold, self.ctrl_hold_timer)
-        self.Bind(wx.EVT_KEY_UP, self._on_key_up)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_ACTIVATE, self.on_activity)
         wx.CallAfter(self.check_lock)
@@ -109,9 +108,11 @@ class DesktopFrame(wx.Frame):
             self.show_docs()
         elif keycode == wx.WXK_CONTROL:
             if not self.ctrl_hold_timer.IsRunning():
-                self.ctrl_hold_timer.Start(5000, wx.TIMER_ONE_SHOT)
-        else:
+                self.ctrl_hold_timer.Start(3000, wx.TIMER_ONE_SHOT)
+        elif not event.ControlDown():
             self.ctrl_hold_timer.Stop()
+            event.Skip()
+        else:
             event.Skip()
 
     def show_help(self):
@@ -128,34 +129,23 @@ class DesktopFrame(wx.Frame):
             msg = translation._("desktop.docs")
         self.api.speak(msg)
 
-    def _on_key_up(self, event):
-        if event.GetKeyCode() == wx.WXK_CONTROL:
-            self.ctrl_hold_timer.Stop()
-        event.Skip()
-
     def _on_ctrl_hold(self, event):
-        self._show_ctrl_menu()
+        if wx.GetKeyState(wx.WXK_CONTROL):
+            self._show_power_dialog()
 
-    def _show_ctrl_menu(self):
+    def _show_power_dialog(self):
         menu = wx.Menu()
-        menu.Append(5011, "Lock Screen")
-        menu.AppendSeparator()
         menu.Append(5012, "Restart")
         menu.Append(5013, "Shutdown")
-        self.Bind(wx.EVT_MENU, self._on_ctrl_menu_item)
+        menu.AppendSeparator()
+        menu.Append(5014, "Emergency Shutdown")
+        self.Bind(wx.EVT_MENU, self._on_power_action)
         self.PopupMenu(menu)
         menu.Destroy()
 
-    def _on_ctrl_menu_item(self, event):
+    def _on_power_action(self, event):
         id_ = event.GetId()
-        if id_ == 5011:
-            config = load_lock_config(self.data_dir)
-            if config.get("enabled"):
-                dlg = LockScreen(self, self.data_dir)
-                dlg.ShowModal()
-            else:
-                self.api.speak("No lock screen configured.")
-        elif id_ == 5012:
+        if id_ == 5012:
             import sys, subprocess
             subprocess.Popen([sys.executable, __file__])
             self._allow_close = True
@@ -165,6 +155,52 @@ class DesktopFrame(wx.Frame):
             self._allow_close = True
             self.Close()
             wx.CallAfter(wx.Exit)
+        elif id_ == 5014:
+            self._start_emergency_shutdown()
+
+    def _start_emergency_shutdown(self):
+        countdown = [3]
+        timer = wx.Timer(self)
+        dlg = wx.Dialog(self, title="Emergency Shutdown", size=(300, 120))
+        dlg.SetBackgroundColour(wx.Colour(30, 0, 0))
+        panel = wx.Panel(dlg)
+        panel.SetBackgroundColour(wx.Colour(30, 0, 0))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        msg = wx.StaticText(panel, label="Shutting down in 3...")
+        msg.SetForegroundColour(wx.Colour(255, 100, 100))
+        msg.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        sizer.Add(msg, 1, wx.ALL | wx.CENTER, 20)
+
+        hint = wx.StaticText(panel, label="Press Esc to cancel")
+        hint.SetForegroundColour(wx.Colour(200, 200, 200))
+        sizer.Add(hint, 0, wx.ALL | wx.CENTER, 5)
+
+        panel.SetSizer(sizer)
+        dlg.CenterOnParent()
+
+        def on_tick(evt):
+            countdown[0] -= 1
+            if countdown[0] <= 0:
+                timer.Stop()
+                dlg.Close()
+                import os as _os
+                _os._exit(0)
+            else:
+                msg.SetLabel(f"Shutting down in {countdown[0]}...")
+                timer.Start(1000, wx.TIMER_ONE_SHOT)
+
+        def on_key(evt):
+            if evt.GetKeyCode() == wx.WXK_ESCAPE:
+                timer.Stop()
+                dlg.Close()
+            evt.Skip()
+
+        self.Bind(wx.EVT_TIMER, on_tick, timer)
+        dlg.Bind(wx.EVT_CHAR_HOOK, on_key)
+        timer.Start(1000, wx.TIMER_ONE_SHOT)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def _on_close(self, event):
         if not getattr(self, '_allow_close', False):

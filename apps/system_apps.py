@@ -91,15 +91,84 @@ class SettingsApp(BlindApp):
         if not self.notebook or self.dev_panel:
             return
         self.dev_panel = wx.Panel(self.notebook)
+        self.dev_panel.SetBackgroundColour(wx.Colour(5, 5, 5))
         dev_sizer = wx.BoxSizer(wx.VERTICAL)
-        
+
+        title = self.make_dev_setting(self.dev_panel, "Developer Options")
+        title.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        dev_sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
+
+        info = self.make_dev_setting(self.dev_panel, "Developer options are active")
+        dev_sizer.Add(info, 0, wx.ALL | wx.CENTER, 5)
+
+        self.add_separator(dev_sizer, 10, self.dev_panel)
+
+        dev_items = [
+            ("Open Data Folder", self._dev_open_data, "data"),
+            ("Open Apps Folder", self._dev_open_apps, "apps"),
+            ("Reload Plugins", self._dev_reload_plugins, "reload"),
+            ("Edit Main Config", self._dev_edit_config, "config"),
+            ("Edit Appearance Config", self._dev_edit_appearance, "appearance"),
+            ("Run Diagnostics", self._dev_run_diagnostics, "diagnostics"),
+        ]
+        for label, handler, _ in dev_items:
+            dev_sizer.Add(self.make_button(self.dev_panel, label, handler, label), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 8)
+
+        self.add_separator(dev_sizer, 10, self.dev_panel)
+
         disable_btn = wx.Button(self.dev_panel, label="Disable Developer Options")
+        disable_btn.SetName("Disable Developer Options")
+        disable_btn.SetBackgroundColour(wx.Colour(50, 0, 0))
+        disable_btn.SetForegroundColour(wx.Colour(180, 100, 100))
         disable_btn.Bind(wx.EVT_BUTTON, self.on_disable_dev_mode)
-        dev_sizer.Add(disable_btn, 0, wx.ALL | wx.CENTER, 20)
-        
+        dev_sizer.Add(disable_btn, 0, wx.EXPAND | wx.ALL, 15)
+
         self.dev_panel.SetSizer(dev_sizer)
         self.notebook.AddPage(self.dev_panel, "Developer")
         self.api.speak("Developer tab added.")
+
+    def _dev_open_data(self, event):
+        os.startfile(self.api.data_dir)
+
+    def _dev_open_apps(self, event):
+        import glob as _glob
+        apps_path = os.path.join(os.getcwd(), "apps")
+        os.startfile(apps_path)
+
+    def _dev_reload_plugins(self, event):
+        try:
+            desktop = self.api.desktop
+            desktop.load_plugins()
+            desktop.refresh_app_list()
+            self.api.speak("Plugins reloaded.")
+        except Exception as e:
+            self.api.speak(f"Reload failed: {e}")
+
+    def _dev_edit_config(self, event):
+        path = os.path.join(self.api.data_dir, "pyos_config.json")
+        self.api.launch_app("TextEditorApp", filepath=path)
+
+    def _dev_edit_appearance(self, event):
+        path = config_manager.get_appearance_path(self.api.data_dir)
+        self.api.launch_app("TextEditorApp", filepath=path)
+
+    def _dev_run_diagnostics(self, event):
+        import sys as _sys, io as _io
+        try:
+            old_stdout = _sys.stdout
+            _sys.stdout = buf = _io.StringIO()
+            import diagnose_startup
+            diagnose_startup.diagnose()
+            _sys.stdout = old_stdout
+            log_path = os.path.join(os.getcwd(), "startup_error.log")
+            if os.path.exists(log_path):
+                with open(log_path) as f:
+                    content = f.read()
+                self.show_info(content.strip() or "Diagnostics completed.", "Diagnostics")
+            else:
+                self.show_info("Diagnostics completed. No errors found.", "Diagnostics")
+        except Exception as e:
+            self.show_error(f"Diagnostics failed: {e}")
 
     def on_disable_dev_mode(self, event):
         self.config["developer_mode"] = False
