@@ -117,6 +117,16 @@ class SettingsApp(BlindApp):
 
         self.add_separator(dev_sizer, 10, self.dev_panel)
 
+        ffmpeg_box = wx.CheckBox(self.dev_panel, label="Force ffmpeg for sounds (disables sounddevice)")
+        ffmpeg_box.SetName("Force ffmpeg")
+        ffmpeg_box.SetValue(self.api.sounds.get_ffmpeg_flag())
+        ffmpeg_box.SetBackgroundColour(wx.Colour(5, 5, 5))
+        ffmpeg_box.SetForegroundColour(wx.Colour(200, 200, 200))
+        ffmpeg_box.Bind(wx.EVT_CHECKBOX, lambda evt: self.api.sounds.set_ffmpeg_flag(ffmpeg_box.GetValue()))
+        dev_sizer.Add(ffmpeg_box, 0, wx.ALL, 8)
+
+        self.add_separator(dev_sizer, 10, self.dev_panel)
+
         disable_btn = wx.Button(self.dev_panel, label="Disable Developer Options")
         disable_btn.SetName("Disable Developer Options")
         disable_btn.SetBackgroundColour(wx.Colour(50, 0, 0))

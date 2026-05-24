@@ -79,6 +79,9 @@ class SoundManager:
         # Preload essential sounds
         self.preload_sounds(["nav", "launch", "close", "alert"])
 
+        # Whether to force ffplay (for debugging/custom setups)
+        self._use_ffmpeg = self._load_ffmpeg_flag()
+
     def set_volume(self, volume):
         self.volume = max(0.0, min(1.0, float(volume)))
 
@@ -154,6 +157,31 @@ class SoundManager:
             except Exception as e:
                 print(f"Error saving theme name: {e}")
 
+    def get_ffmpeg_flag(self):
+        return self._use_ffmpeg
+
+    def set_ffmpeg_flag(self, enabled):
+        self._use_ffmpeg = bool(enabled)
+        try:
+            cfg = {}
+            if os.path.exists(self.config_path):
+                with open(self.config_path, "r", encoding='utf-8') as f:
+                    cfg = json.load(f)
+            cfg["use_ffmpeg"] = self._use_ffmpeg
+            with open(self.config_path, "w", encoding='utf-8') as f:
+                json.dump(cfg, f, indent=4)
+        except Exception as e:
+            print(f"Error saving ffmpeg flag: {e}")
+
+    def _load_ffmpeg_flag(self):
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r", encoding='utf-8') as f:
+                    return bool(json.load(f).get("use_ffmpeg", False))
+            except Exception:
+                pass
+        return False
+
     def play(self, sound_type):
         if self.current_theme not in self.themes:
             self.current_theme = "Modern"
@@ -175,13 +203,15 @@ class SoundManager:
                 threading.Thread(target=self._play_notes, args=(data,), daemon=True).start()
 
     def _play_notes(self, notes):
-        """Play a sequence of notes using ffplay and lavfi."""
-        # Use ffplay for tones for reliability across devices.
+        """Play a sequence of notes — sounddevice primary, ffplay fallback."""
+        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes):
+            return
         self._play_notes_ffplay(notes)
 
     def _play_notes_sync(self, notes):
-        """Play notes synchronously."""
-        # Use ffplay for tones for reliability across devices.
+        """Play notes synchronously — sounddevice primary, ffplay fallback."""
+        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes):
+            return
         self._play_notes_ffplay(notes)
 
     def _build_notes_filter(self, notes):
@@ -201,12 +231,10 @@ class SoundManager:
 
     def _play_file(self, path):
         if os.path.exists(path):
-            if self._play_file_with_sounddevice(path):
+            if not self._use_ffmpeg and self._play_file_with_sounddevice(path):
                 return
             try:
-                # Use forward slashes for ffmpeg and escape for filter string
                 clean_path = path.replace(os.sep, '/')
-                # Add a small amount of silence at the end to prevent truncation
                 subprocess.run(["ffplay", "-nodisp", "-autoexit", "-af", "apad=pad_dur=0.3", clean_path], 
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
@@ -214,7 +242,7 @@ class SoundManager:
 
     def _play_file_sync(self, path):
         if os.path.exists(path):
-            if self._play_file_with_sounddevice(path):
+            if not self._use_ffmpeg and self._play_file_with_sounddevice(path):
                 return
             try:
                 clean_path = path.replace(os.sep, '/')
