@@ -61,12 +61,13 @@ class AssistantApp(BlindApp):
 
     def run(self):
         self._create_frame('AI Assistant', size=(500, 350))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Assistant Panel")
         panel.SetBackgroundColour(wx.Colour(20, 20, 50))
         sizer = self.vbox()
 
         top_sizer = self.hbox()
         self.status_label = wx.StaticText(panel, label="Type your question and press Enter")
+        self.status_label.SetName("Assistant Status")
         self.status_label.SetForegroundColour(wx.Colour(255, 255, 255))
         self.status_label.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         top_sizer.Add(self.status_label, 1, wx.ALL | wx.CENTER, 20)

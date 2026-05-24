@@ -18,7 +18,7 @@ class MessagesApp(BlindApp):
 
     def run(self):
         self._create_frame(title="Master-Chat", size=(500, 600))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Messages Panel")
         sizer = self.vbox()
 
         filter_sizer = self.hbox()

@@ -27,24 +27,48 @@ class SoundManager:
                 "nav": [(600, 50)],
                 "launch": [(440, 100), (880, 100)],
                 "close": [(880, 100), (440, 100)],
-                "alert": [(1000, 200), (800, 200)]
+                "alert": [(1000, 200), (800, 200)],
+                "shutdown": [(659, 200), (523, 200), (392, 300)],
+                "power_menu": [(440, 80)],
+                "context_menu": [(400, 50)]
             },
             "Retro": {
                 "startup": [(100, 100), (200, 100), (300, 100)],
                 "nav": [(150, 30)],
                 "launch": [(200, 50), (400, 50), (600, 50)],
                 "close": [(600, 50), (400, 50), (200, 50)],
-                "alert": [(400, 100), (400, 100), (400, 100)]
+                "alert": [(400, 100), (400, 100), (400, 100)],
+                "shutdown": [(300, 100), (200, 100), (100, 200)],
+                "power_menu": [(200, 30)],
+                "context_menu": [(150, 20)]
             },
             "Classic": {
                 "startup": [(523, 400)],
                 "nav": [(400, 20)],
                 "launch": [(523, 100)],
                 "close": [(261, 100)],
-                "alert": [(1000, 500)]
-            }
+                "alert": [(1000, 500)],
+                "shutdown": [(392, 300)],
+                "power_menu": [(400, 50)],
+                "context_menu": [(440, 30)]
+            },
+            "Windows XP": {}
         }
         
+        # Resolve Windows XP sound file paths relative to this file's location
+        xp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds", "xp")
+        if os.path.isdir(xp_dir):
+            self.default_themes["Windows XP"] = {
+                "startup": os.path.join(xp_dir, "Windows XP Startup.wav"),
+                "nav": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
+                "launch": os.path.join(xp_dir, "Windows XP Default.wav"),
+                "close": os.path.join(xp_dir, "Windows XP Minimize.wav"),
+                "alert": os.path.join(xp_dir, "Windows XP Error.wav"),
+                "shutdown": os.path.join(xp_dir, "Windows XP Shutdown.wav"),
+                "power_menu": os.path.join(xp_dir, "Windows XP Start.wav"),
+                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav")
+            }
+
         self.themes = self.default_themes.copy()
         custom_themes_data = self._load_all_custom_themes()
         self.themes.update(custom_themes_data)

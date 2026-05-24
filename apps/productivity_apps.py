@@ -18,7 +18,7 @@ class TimerApp(BlindApp):
 
     def run(self):
         self._create_frame("Timer", (320, 300))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Timer Panel")
         sizer = self.vbox()
 
         sizer.Add(self.make_static(panel, "Enter seconds:", "Seconds Label"), 0, wx.ALL | wx.CENTER, 5)
@@ -162,7 +162,7 @@ class RemindersApp(BlindApp):
 
     def run(self):
         self._create_frame("Reminders", (450, 450))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Reminders Panel")
         sizer = self.vbox()
 
         self.input_ctrl = self.make_textctrl(panel, name="Reminder Input", style=wx.TE_PROCESS_ENTER)

@@ -25,7 +25,7 @@ class TerminalApp(BlindApp):
         self.bind_accelerator(wx.ACCEL_CTRL, ord('0'), a_id, self.on_font_reset)
 
         self._create_frame('Terminal', (600, 400))
-        self.panel = self.make_panel(self.frame)
+        self.panel = self.make_panel(self.frame, "Terminal Panel")
         sizer = self.vbox()
 
         self.output_text = self.make_textctrl(self.panel, name="Terminal Output", style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)

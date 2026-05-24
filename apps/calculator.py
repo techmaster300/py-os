@@ -27,7 +27,7 @@ class Calculator(BlindApp):
         self.bind_accelerator(wx.ACCEL_NORMAL, wx.WXK_ESCAPE, nid, self.on_clear)
 
         self._create_frame("Calculator", (320, 480))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Calculator Panel")
         sizer = self.vbox()
 
         self.display = self.make_textctrl(panel, name="Calculator Display", style=wx.TE_PROCESS_ENTER)
@@ -39,6 +39,7 @@ class Calculator(BlindApp):
         sizer.Add(self.display, 0, wx.EXPAND | wx.ALL, 10)
 
         self.result_label = wx.StaticText(panel, label="Result: ", style=wx.ALIGN_RIGHT)
+        self.result_label.SetName("Calculator Result")
         self.result_label.SetForegroundColour(wx.Colour(100, 255, 100))
         self.result_label.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(self.result_label, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)

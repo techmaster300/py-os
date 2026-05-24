@@ -33,7 +33,7 @@ class AppStore(BlindApp):
 
     def run(self):
         self._create_frame("App Store", (500, 500))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "App Store Panel")
         sizer = self.vbox()
 
         sizer.Add(self.make_static(panel, "Search (type to filter):", "Search Label"), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)

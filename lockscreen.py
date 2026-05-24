@@ -55,15 +55,18 @@ class LockScreen(wx.Dialog):
         self.SetBackgroundColour(wx.Colour(lock_bg))
 
         panel = wx.Panel(self)
+        panel.SetName("Lock Screen Panel")
         panel.SetBackgroundColour(wx.Colour(lock_bg))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         title = wx.StaticText(panel, label=lock_title_text)
+        title.SetName("Lock Screen Title")
         title.SetForegroundColour(wx.Colour(lock_title_c))
         title.SetFont(wx.Font(lock_title_fs, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
 
         self.display = wx.TextCtrl(panel, style=wx.TE_READONLY | wx.TE_CENTER)
+        self.display.SetName("Lock Screen Display")
         self.display.SetBackgroundColour(wx.Colour(lock_input_bg))
         self.display.SetForegroundColour(wx.Colour(lock_input_fg))
         self.display.SetFont(wx.Font(lock_disp_fs, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
@@ -74,10 +77,12 @@ class LockScreen(wx.Dialog):
         self._lock_input_fs = lock_input_fs
         self._lock_mask = lock_mask
         self.mode_label = wx.StaticText(panel, label=self._mode_display())
+        self.mode_label.SetName("Lock Mode Label")
         self.mode_label.SetForegroundColour(wx.Colour(lock_mode_c))
         sizer.Add(self.mode_label, 0, wx.ALL | wx.CENTER, 5)
 
         self.status = wx.StaticText(panel, label="")
+        self.status.SetName("Lock Status")
         self.status.SetForegroundColour(wx.Colour(lock_status_c))
         sizer.Add(self.status, 0, wx.ALL | wx.CENTER, 5)
 
@@ -86,6 +91,7 @@ class LockScreen(wx.Dialog):
         else:
             pwd_sizer = wx.BoxSizer(wx.VERTICAL)
             self.pwd_input = wx.TextCtrl(panel, style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER)
+            self.pwd_input.SetName("Password Input")
             self.pwd_input.SetBackgroundColour(wx.Colour(lock_input_bg))
             self.pwd_input.SetForegroundColour(wx.Colour(lock_input_fg))
             self.pwd_input.SetFont(wx.Font(lock_input_fs, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
@@ -94,6 +100,7 @@ class LockScreen(wx.Dialog):
             sizer.Add(pwd_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 20)
 
         unlock_btn = wx.Button(panel, label="Unlock")
+        unlock_btn.SetName("Unlock Button")
         unlock_btn.Bind(wx.EVT_BUTTON, self.on_unlock)
         sizer.Add(unlock_btn, 0, wx.ALL | wx.CENTER, 10)
 
@@ -116,6 +123,7 @@ class LockScreen(wx.Dialog):
         pin_fs = getattr(self, '_lock_pin_fs', 14)
         for label, action in keys:
             btn = wx.Button(panel, label=label, size=(70, 50))
+            btn.SetName(label if label else "Backspace")
             btn.SetFont(wx.Font(pin_fs, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
             if action == "bs":
                 btn.Bind(wx.EVT_BUTTON, self.on_backspace)

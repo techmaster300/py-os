@@ -56,12 +56,13 @@ class HelpApp(BlindApp):
 
     def run(self):
         self._create_frame("Help and Documentation", (600, 500))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Help Panel")
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         
         sizer = self.vbox()
         
         title = wx.StaticText(panel, label="Help Center")
+        title.SetName("Help Center Title")
         title.SetForegroundColour(wx.Colour(255, 255, 255))
         title.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)

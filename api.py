@@ -266,6 +266,12 @@ class BlindApp:
             c.SetName(name)
         return c
 
+    def make_listctrl(self, parent, name="", style=wx.LC_REPORT):
+        ctrl = wx.ListCtrl(parent, style=style)
+        if name:
+            ctrl.SetName(name)
+        return ctrl
+
     def make_static(self, parent, label, name="", size=None):
         kwargs = dict(label=label)
         if size is not None:

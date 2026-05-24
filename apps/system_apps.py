@@ -91,14 +91,15 @@ class SettingsApp(BlindApp):
         if not self.notebook or self.dev_panel:
             return
         self.dev_panel = wx.Panel(self.notebook)
+        self.dev_panel.SetName("Developer Tab")
         self.dev_panel.SetBackgroundColour(wx.Colour(5, 5, 5))
         dev_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        title = self.make_dev_setting(self.dev_panel, "Developer Options")
+        title = self.make_dev_setting(self.dev_panel, "Developer Options", "Developer Options")
         title.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         dev_sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
 
-        info = self.make_dev_setting(self.dev_panel, "Developer options are active")
+        info = self.make_dev_setting(self.dev_panel, "Developer options are active", "Developer Info")
         dev_sizer.Add(info, 0, wx.ALL | wx.CENTER, 5)
 
         self.add_separator(dev_sizer, 10, self.dev_panel)
@@ -128,12 +129,11 @@ class SettingsApp(BlindApp):
         self.api.speak("Developer tab added.")
 
     def _dev_open_data(self, event):
-        os.startfile(self.api.data_dir)
+        self.api.launch_app("FileExplorerApp", path=self.api.data_dir)
 
     def _dev_open_apps(self, event):
-        import glob as _glob
         apps_path = os.path.join(os.getcwd(), "apps")
-        os.startfile(apps_path)
+        self.api.launch_app("FileExplorerApp", path=apps_path)
 
     def _dev_reload_plugins(self, event):
         try:
@@ -203,17 +203,21 @@ class SettingsApp(BlindApp):
 
     def _show_dev_unlock_dialog(self, config):
         dlg = wx.Dialog(self.frame, title="Developer Unlock", size=(350, 420))
+        dlg.SetName("Developer Unlock Dialog")
         dlg.SetBackgroundColour(wx.Colour(0, 0, 0))
         panel = wx.Panel(dlg)
+        panel.SetName("Developer Unlock Panel")
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         title = wx.StaticText(panel, label="Enter your lock code")
+        title.SetName("Unlock Title")
         title.SetForegroundColour(wx.Colour(255, 255, 255))
         title.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
 
         status = wx.StaticText(panel, label="")
+        status.SetName("Unlock Status")
         status.SetForegroundColour(wx.Colour(255, 80, 80))
         sizer.Add(status, 0, wx.ALL | wx.CENTER, 5)
 
@@ -221,6 +225,7 @@ class SettingsApp(BlindApp):
 
         if config.get("lock_type") == "pin":
             display = wx.TextCtrl(panel, style=wx.TE_READONLY | wx.TE_CENTER, size=(150, 40))
+            display.SetName("PIN Display")
             display.SetBackgroundColour(wx.Colour(30, 30, 30))
             display.SetForegroundColour(wx.Colour(255, 255, 255))
             display.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
@@ -245,6 +250,7 @@ class SettingsApp(BlindApp):
             ]
             for label, action in keys:
                 btn = wx.Button(panel, label=label, size=(70, 50))
+                btn.SetName(label if label else "Backspace")
                 btn.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
                 if action == "bs":
                     btn.Bind(wx.EVT_BUTTON, lambda evt: on_backspace())
@@ -254,6 +260,7 @@ class SettingsApp(BlindApp):
             sizer.Add(grid, 0, wx.ALL | wx.CENTER, 10)
         else:
             pwd_input = wx.TextCtrl(panel, style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER, size=(200, 30))
+            pwd_input.SetName("Password Input")
             pwd_input.SetBackgroundColour(wx.Colour(30, 30, 30))
             pwd_input.SetForegroundColour(wx.Colour(255, 255, 255))
             sizer.Add(pwd_input, 0, wx.ALL | wx.CENTER, 10)
@@ -275,10 +282,12 @@ class SettingsApp(BlindApp):
                     pwd_input.SetValue("")
 
         unlock_btn = wx.Button(panel, label="Unlock")
+        unlock_btn.SetName("Unlock Button")
         unlock_btn.Bind(wx.EVT_BUTTON, on_submit)
         sizer.Add(unlock_btn, 0, wx.ALL | wx.CENTER, 10)
 
         cancel_btn = wx.Button(panel, label="Cancel")
+        cancel_btn.SetName("Cancel Button")
         cancel_btn.Bind(wx.EVT_BUTTON, lambda evt: dlg.Close())
         sizer.Add(cancel_btn, 0, wx.ALL | wx.CENTER, 5)
 
@@ -369,13 +378,15 @@ class SettingsApp(BlindApp):
     def run(self):
         self.frame = wx.Frame(None, title="Settings", size=(500, 600))
         self.notebook = wx.Notebook(self.frame)
+        self.notebook.SetName("Settings Notebook")
 
         # --- General Tab ---
-        gen_panel = self.make_panel(self.notebook)
+        gen_panel = self.make_panel(self.notebook, "General Tab")
         gen_sizer = self.vbox()
         self.notebook.AddPage(gen_panel, "General")
 
         title = wx.StaticText(gen_panel, label="System Settings")
+        title.SetName("System Settings Title")
         title.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         gen_sizer.Add(title, 0, wx.ALL | wx.CENTER, 15)
 
@@ -410,7 +421,7 @@ class SettingsApp(BlindApp):
         gen_panel.SetSizer(gen_sizer)
 
         # --- Speech Tab ---
-        speech_panel = self.make_panel(self.notebook)
+        speech_panel = self.make_panel(self.notebook, "Speech Tab")
         speech_sizer = self.vbox()
         self.notebook.AddPage(speech_panel, "Speech")
 
@@ -431,7 +442,7 @@ class SettingsApp(BlindApp):
         speech_panel.SetSizer(speech_sizer)
 
         # --- Audio Tab ---
-        audio_panel = self.make_panel(self.notebook)
+        audio_panel = self.make_panel(self.notebook, "Audio Tab")
         audio_sizer = self.vbox()
         self.notebook.AddPage(audio_panel, "Audio")
 
@@ -452,11 +463,12 @@ class SettingsApp(BlindApp):
         audio_panel.SetSizer(audio_sizer)
 
         # --- Security Tab ---
-        sec_panel = self.make_panel(self.notebook)
+        sec_panel = self.make_panel(self.notebook, "Security Tab")
         sec_sizer = self.vbox()
         self.notebook.AddPage(sec_panel, "Security")
 
         sec_title = wx.StaticText(sec_panel, label="Lock Screen Settings")
+        sec_title.SetName("Lock Screen Settings Title")
         sec_title.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sec_sizer.Add(sec_title, 0, wx.ALL | wx.CENTER, 15)
 
@@ -500,11 +512,12 @@ class SettingsApp(BlindApp):
         sec_panel.SetSizer(sec_sizer)
 
         # --- Appearance Tab ---
-        appearance_panel = self.make_panel(self.notebook)
+        appearance_panel = self.make_panel(self.notebook, "Appearance Tab")
         appearance_sizer = self.vbox()
         self.notebook.AddPage(appearance_panel, "Appearance")
 
         app_scroll = wx.ScrolledWindow(appearance_panel, style=wx.VSCROLL)
+        app_scroll.SetName("Appearance Scroll")
         app_scroll.SetScrollRate(0, 20)
         app_scroll.SetBackgroundColour(wx.Colour(0, 0, 0))
         app_scroll_sizer = self.vbox()
@@ -521,6 +534,7 @@ class SettingsApp(BlindApp):
 
         # Desktop section
         desk_label = wx.StaticText(app_scroll, label="Desktop")
+        desk_label.SetName("Desktop Section")
         desk_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         desk_label.SetForegroundColour(wx.Colour(255, 255, 255))
         app_scroll_sizer.Add(desk_label, 0, wx.ALL | wx.CENTER, 10)
@@ -583,6 +597,7 @@ class SettingsApp(BlindApp):
         self.add_separator(app_scroll_sizer, 10, app_scroll)
 
         lock_label = wx.StaticText(app_scroll, label="Lock Screen")
+        lock_label.SetName("Lock Screen Section")
         lock_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         lock_label.SetForegroundColour(wx.Colour(255, 255, 255))
         app_scroll_sizer.Add(lock_label, 0, wx.ALL | wx.CENTER, 10)

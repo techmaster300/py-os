@@ -50,10 +50,11 @@ class AudioRecorderApp(BlindApp):
 
     def run(self, file_path=None):
         self.frame = self._create_frame("Media Studio", size=(700, 620))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Media Studio Panel")
         sizer = self.vbox()
 
         title = wx.StaticText(panel, label="Media Studio")
+        title.SetName("Media Studio Title")
         title.SetForegroundColour(wx.Colour(255, 255, 255))
         title.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(title, 0, wx.ALL | wx.CENTER, 12)
@@ -63,10 +64,12 @@ class AudioRecorderApp(BlindApp):
         sizer.Add(self.filename_input, 0, wx.EXPAND | wx.ALL, 10)
 
         self.duration_label = wx.StaticText(panel, label="Duration: 0 seconds")
+        self.duration_label.SetName("Duration Display")
         self.duration_label.SetForegroundColour(wx.Colour(150, 255, 150))
         sizer.Add(self.duration_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         self.status_label = wx.StaticText(panel, label="Status: Ready")
+        self.status_label.SetName("Status Display")
         self.status_label.SetForegroundColour(wx.Colour(255, 255, 100))
         sizer.Add(self.status_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 

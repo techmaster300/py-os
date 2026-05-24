@@ -48,17 +48,19 @@ class DesktopFrame(wx.Frame):
 
         ac = self.appearance_config
         self.panel = wx.Panel(self)
+        self.panel.SetName("Desktop Panel")
         self.panel.SetBackgroundColour(wx.Colour(ac.get("desktop_bg", "#000000")))
         
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Desktop Header
         self.header = wx.StaticText(self.panel, label=ac.get("desktop_header", "PyOS Desktop"))
-        self.header.SetForegroundColour(wx.Colour(ac.get("desktop_header_color", "#FFFFFF")))
+        self.header.SetName("Desktop Header")
         self.header.SetFont(wx.Font(ac.get("desktop_header_font_size", 18), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         self.sizer.Add(self.header, 0, wx.ALL | wx.CENTER, 20)
 
         self.scrolled_window = wx.ScrolledWindow(self.panel, style=wx.VSCROLL)
+        self.scrolled_window.SetName("App List Scroll")
         self.scrolled_window.SetScrollRate(0, ac.get("desktop_scroll_rate", 20))
         self.scrolled_window.SetBackgroundColour(wx.Colour(ac.get("desktop_bg", "#000000")))
         self.app_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -96,6 +98,8 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_TIMER, self._on_ctrl_hold, self.ctrl_hold_timer)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_ACTIVATE, self.on_activity)
+        self.Bind(wx.EVT_MENU_HIGHLIGHT_ALL, self._on_menu_highlight)
+        self._menu_open = False
         wx.CallAfter(self.check_lock)
         wx.CallAfter(self.greet)
 
@@ -114,6 +118,11 @@ class DesktopFrame(wx.Frame):
             event.Skip()
         else:
             event.Skip()
+
+    def _on_menu_highlight(self, event):
+        if self._menu_open:
+            self.api.play_sound("nav")
+        event.Skip()
 
     def show_help(self):
         if self.active_app:
@@ -134,24 +143,29 @@ class DesktopFrame(wx.Frame):
             self._show_power_dialog()
 
     def _show_power_dialog(self):
+        self.api.play_sound("power_menu")
         menu = wx.Menu()
         menu.Append(5012, "Restart")
         menu.Append(5013, "Shutdown")
         menu.AppendSeparator()
         menu.Append(5014, "Emergency Shutdown")
         self.Bind(wx.EVT_MENU, self._on_power_action)
+        self._menu_open = True
         self.PopupMenu(menu)
+        self._menu_open = False
         menu.Destroy()
 
     def _on_power_action(self, event):
         id_ = event.GetId()
         if id_ == 5012:
             import sys, subprocess
+            self.api.play_sound("shutdown")
             subprocess.Popen([sys.executable, __file__])
             self._allow_close = True
             self.Close()
             wx.CallAfter(wx.Exit)
         elif id_ == 5013:
+            self.api.play_sound("shutdown")
             self._allow_close = True
             self.Close()
             wx.CallAfter(wx.Exit)
@@ -159,20 +173,25 @@ class DesktopFrame(wx.Frame):
             self._start_emergency_shutdown()
 
     def _start_emergency_shutdown(self):
+        self.api.play_sound("alert")
         countdown = [3]
         timer = wx.Timer(self)
         dlg = wx.Dialog(self, title="Emergency Shutdown", size=(300, 120))
+        dlg.SetName("Emergency Shutdown Dialog")
         dlg.SetBackgroundColour(wx.Colour(30, 0, 0))
         panel = wx.Panel(dlg)
+        panel.SetName("Emergency Shutdown Panel")
         panel.SetBackgroundColour(wx.Colour(30, 0, 0))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         msg = wx.StaticText(panel, label="Shutting down in 3...")
+        msg.SetName("Shutdown Countdown")
         msg.SetForegroundColour(wx.Colour(255, 100, 100))
         msg.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(msg, 1, wx.ALL | wx.CENTER, 20)
 
         hint = wx.StaticText(panel, label="Press Esc to cancel")
+        hint.SetName("Cancel Hint")
         hint.SetForegroundColour(wx.Colour(200, 200, 200))
         sizer.Add(hint, 0, wx.ALL | wx.CENTER, 5)
 
@@ -298,6 +317,7 @@ class DesktopFrame(wx.Frame):
 
         for app in self.apps:
             btn = wx.Button(self.scrolled_window, label=app.name)
+            btn.SetName(app.name)
             btn.SetFont(wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM))
             btn.SetBackgroundColour(btn_bg)
             btn.SetForegroundColour(btn_fg)
@@ -340,6 +360,7 @@ class DesktopFrame(wx.Frame):
             return
         names = [a.name for a in self.open_apps]
         dlg = wx.SingleChoiceDialog(self, translation._("desktop.switch_hint"), translation._("desktop.open_apps_overview"), names)
+        dlg.SetName("Open Apps Overview")
         dlg.SetBackgroundColour(wx.Colour(0, 0, 0))
         if dlg.ShowModal() == wx.ID_OK:
             sel = dlg.GetSelection()
@@ -356,6 +377,7 @@ class DesktopFrame(wx.Frame):
             return
         items = [f"[{n['level']}] {n['title']}: {n['message']}" for n in self.notifications]
         dlg = wx.SingleChoiceDialog(self, translation._("desktop.notification_hint"), translation._("desktop.notification_shade"), items)
+        dlg.SetName("Notifications List")
         dlg.SetBackgroundColour(wx.Colour(0, 0, 0))
         if dlg.ShowModal() == wx.ID_OK:
             sel = dlg.GetSelection()
@@ -416,6 +438,7 @@ class DesktopFrame(wx.Frame):
                 self.app_buttons[0].SetFocus()
 
     def show_app_context_menu(self, btn, app):
+        self.api.play_sound("context_menu")
         menu = wx.Menu()
         hidden = self.sys_config.get("hidden_apps", [])
         if app.name in hidden:
@@ -428,7 +451,9 @@ class DesktopFrame(wx.Frame):
         uninstall_item = menu.Append(wx.ID_ANY, "&Uninstall")
         self.Bind(wx.EVT_MENU, lambda evt, a=app: self.on_uninstall_app(a), uninstall_item)
 
+        self._menu_open = True
         btn.PopupMenu(menu)
+        self._menu_open = False
         menu.Destroy()
 
     def on_unpin_app(self, app):

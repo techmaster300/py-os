@@ -26,7 +26,7 @@ class TextEditorApp(BlindApp):
             a_id += 1
 
         self._create_frame("Text Editor", (600, 450))
-        panel = self.make_panel(self.frame)
+        panel = self.make_panel(self.frame, "Editor Panel")
         sizer = self.vbox()
 
         self.text_ctrl = self.make_textctrl(panel, name="Editor Text", style=wx.TE_MULTILINE)
