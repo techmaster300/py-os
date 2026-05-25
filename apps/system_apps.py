@@ -860,6 +860,16 @@ class SettingsApp(BlindApp):
         gen_sizer.Add(self.theme_choice, 0, wx.EXPAND | wx.ALL, 8)
 
         gen_sizer.Add(self.make_button(gen_panel, "Check for Updates", self.check_updates, "Update Button"), 0, wx.EXPAND | wx.ALL, 8)
+
+        import rom_manager
+        rname, rdata = rom_manager.get_active_rom(self.api.data_dir)
+        rom_info = f"ROM: {rdata.get('name', rname)} v{rdata.get('version', '?')} by {rdata.get('author', '?')}"
+        rom_btn = self.make_button(gen_panel, rom_info, lambda e: self.show_info(
+            f"ROM: {rdata.get('name', rname)}\nVersion: {rdata.get('version', '?')}\n"
+            f"Author: {rdata.get('author', '?')}\n\n{rdata.get('description', '')}"
+        ), "ROM Info")
+        gen_sizer.Add(rom_btn, 0, wx.EXPAND | wx.ALL, 8)
+
         gen_panel.SetSizer(gen_sizer)
 
         # --- Speech Tab ---

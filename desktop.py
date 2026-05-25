@@ -9,13 +9,14 @@ import time
 import traceback
 import config_manager
 import slot_manager
+import rom_manager
 import translation
 import sys as _sys
 from api import SystemAPI, BlindApp
 from lockscreen import LockScreen, load_config as load_lock_config
 
 class BootScreen(BlindApp, wx.Frame):
-    def __init__(self, safe_mode=False, slot="a"):
+    def __init__(self, safe_mode=False, slot="a", rom_name="Stock"):
         self.safe_mode = safe_mode
         self.recovery_mode = False
         style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
@@ -30,8 +31,8 @@ class BootScreen(BlindApp, wx.Frame):
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
 
-        slot_text = f"Slot {slot.upper()}"
-        sl = self.make_static(panel, slot_text, font_size=11)
+        info = f"Slot {slot.upper()}  |  {rom_name}"
+        sl = self.make_static(panel, info, font_size=11)
         sl.SetForegroundColour(wx.Colour(100, 100, 100))
         sizer.Add(sl, 0, wx.ALL | wx.CENTER, 2)
 
@@ -940,9 +941,10 @@ if __name__ == "__main__":
         slot_manager.switch_slot(data_dir)
 
     slot = slot_manager.mark_boot_attempt(data_dir)
+    rom_name, _ = rom_manager.get_active_rom(data_dir)
 
     app = wx.App()
-    boot = BootScreen(safe_mode=_safe or _recovery, slot=slot)
+    boot = BootScreen(safe_mode=_safe or _recovery, slot=slot, rom_name=rom_name)
     if not _safe and not _recovery:
         boot.poll_boot_keys()
     if boot.recovery_mode:
@@ -950,6 +952,8 @@ if __name__ == "__main__":
         rec = RecoveryMenu(data_dir)
         rec.Show()
     else:
+        if not _safe and not boot.safe_mode:
+            rom_manager.apply_rom_config(data_dir)
         desktop = DesktopFrame(safe_mode=boot.safe_mode, recovery_mode=boot.recovery_mode)
         slot_manager.mark_boot_success(data_dir)
         desktop.Show()
