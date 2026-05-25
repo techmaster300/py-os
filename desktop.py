@@ -11,6 +11,7 @@ import config_manager
 import slot_manager
 import rom_manager
 import translation
+import pdb_server
 import sys as _sys
 from api import SystemAPI, BlindApp
 from lockscreen import LockScreen, load_config as load_lock_config
@@ -110,6 +111,13 @@ class DesktopFrame(wx.Frame):
             self.api.network.start()
         except Exception as e:
             print(f"Network service failed to start, proceeding anyway: {e}")
+
+        try:
+            self._pdb = pdb_server.PDBServer(self.data_dir, self)
+            self._pdb.start()
+            print(f"PDB server listening on 127.0.0.1:{pdb_server.PORT}")
+        except Exception as e:
+            print(f"PDB server failed to start: {e}")
             
         self.apps = []
         self.app_buttons = []
