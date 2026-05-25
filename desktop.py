@@ -593,7 +593,17 @@ class DesktopFrame(wx.Frame):
             
             self.app_sizer.Add(btn, 0, wx.EXPAND | wx.ALL, ac.get("desktop_button_spacing", 5))
             self.app_buttons.append(btn)
-        
+
+        # PDB debug shortcut
+        pdb_btn = wx.Button(self.scrolled_window, label="PDB Debug")
+        pdb_btn.SetName("PDB Debug")
+        pdb_btn.SetFont(wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM))
+        pdb_btn.SetBackgroundColour(wx.Colour(60, 60, 60))
+        pdb_btn.SetForegroundColour(wx.Colour(0, 200, 0))
+        pdb_btn.Bind(wx.EVT_BUTTON, lambda evt: self._show_pdb_dialog())
+        self.app_sizer.Add(pdb_btn, 0, wx.EXPAND | wx.ALL, ac.get("desktop_button_spacing", 5))
+        self.app_buttons.append(pdb_btn)
+
         self.app_sizer.Layout()
         self.panel.Layout()
         self._load_hotkeys()
@@ -605,6 +615,46 @@ class DesktopFrame(wx.Frame):
                 self.api.speak(f"{app.name}: {app.description}")
         except Exception as e:
             print(f"Error in focus speech: {e}")
+
+    def _show_pdb_dialog(self):
+        dlg = wx.Dialog(self, title="PDB Debug Bridge", size=(600, 400))
+        dlg.SetName("PDB Debug")
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        label = wx.StaticText(panel, label="Enter PDB command:")
+        sizer.Add(label, 0, wx.ALL, 10)
+
+        input_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        input_ctrl.SetName("PDB Command Input")
+        sizer.Add(input_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        output = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
+        output.SetName("PDB Output")
+        output.SetFont(wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sizer.Add(output, 1, wx.EXPAND | wx.ALL, 10)
+
+        def on_enter(event):
+            cmd = input_ctrl.GetValue().strip()
+            if not cmd:
+                return
+            try:
+                import pdb
+                result = pdb.send_command(cmd)
+            except Exception as e:
+                result = f"error: {e}"
+            output.AppendText(f"> {cmd}\n{result}\n\n")
+            input_ctrl.Clear()
+
+        input_ctrl.Bind(wx.EVT_TEXT_ENTER, on_enter)
+
+        close_btn = wx.Button(panel, wx.ID_CLOSE, "Close")
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+
+        panel.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def nav_back(self):
         if self.active_app and self.active_app.frame:
