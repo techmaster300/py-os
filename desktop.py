@@ -38,9 +38,7 @@ class BootScreen(wx.Frame):
         self.Show()
         self.Layout()
         self.Refresh()
-        wx.Yield()
-        self._sub.SetFocus()
-        wx.CallAfter(speech.engine.speak, "PyOS")
+        wx.CallAfter(self._sub.SetFocus)
 
     def _beep(self):
         try:
@@ -69,6 +67,8 @@ class BootScreen(wx.Frame):
                 held_since = None
             wx.Yield()
             time.sleep(0.05)
+        if not self.safe_mode:
+            speech.engine.speak("PyOS")
 
     def close_after(self, delay_ms=2000):
         wx.CallLater(delay_ms, self.Close)

@@ -222,7 +222,7 @@ class SpeechEngine:
                 if text:
                     if not self.sapi_engine:
                         self.sapi_engine = CreateObject("SAPI.SpVoice")
-                    self.sapi_engine.Speak(text, SpeechLib.SVSFlagsAsync)
+                    self.sapi_engine.Speak(text, SVSFlagsAsync)
                 self.speech_queue.task_done()
             except Exception as e:
                 print(f"TTS Worker error: {e}")
@@ -233,7 +233,7 @@ class SpeechEngine:
             self.nvda_dll.nvdaController_cancelSpeech()
         else:
             if self.sapi_engine:
-                self.sapi_engine.Speak("", SpeechLib.SVSFPurgeBeforeSpeak)
+                self.sapi_engine.Speak("", SVSFPurgeBeforeSpeak)
             while not self.speech_queue.empty():
                 try: self.speech_queue.get_nowait()
                 except queue.Empty: break
