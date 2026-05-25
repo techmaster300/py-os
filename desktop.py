@@ -53,11 +53,11 @@ class BootScreen(wx.Frame):
         VK_F2 = 0x71
         start = time.time()
         held_since = None
-        while time.time() - start < 2.0:
+        while time.time() - start < 4.0:
             if ctypes.windll.user32.GetAsyncKeyState(VK_F2) & 0x8000:
                 if held_since is None:
                     held_since = time.time()
-                elif time.time() - held_since >= 1.2:
+                elif time.time() - held_since >= 3.0:
                     self.safe_mode = True
                     self._sub.SetLabel("Safe Mode")
                     self._beep()
@@ -793,6 +793,6 @@ if __name__ == "__main__":
     if not _safe:
         boot.poll_f2_for_safe_mode()
     desktop = DesktopFrame(safe_mode=boot.safe_mode)
-    boot.close_after(800)
+    boot.close_after(2000)
     desktop.Show()
     app.MainLoop()
