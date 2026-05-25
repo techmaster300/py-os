@@ -96,12 +96,13 @@ class ThemeCreatorApp(BlindApp):
             self.update_event_inputs()
 
     def update_event_inputs(self):
+        leave_focus = self.mode_choice.HasFocus()
         if self.sound_choice_mode == "tones":
             self.freq_input.Show()
             self.duration_input.Show()
             self.file_path_input.Hide()
             self.browse_btn.Hide()
-            if not self.freq_input.HasFocus() and not self.duration_input.HasFocus():
+            if not leave_focus:
                 self.freq_input.SetFocus()
             self.api.speak("Tone mode. Enter frequencies then durations.")
         else:
@@ -109,7 +110,7 @@ class ThemeCreatorApp(BlindApp):
             self.duration_input.Hide()
             self.file_path_input.Show()
             self.browse_btn.Show()
-            if not self.file_path_input.HasFocus():
+            if not leave_focus:
                 self.file_path_input.SetFocus()
             self.api.speak("File mode. Type a path or browse.")
         self.frame.Layout()

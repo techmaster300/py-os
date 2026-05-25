@@ -68,6 +68,12 @@ class DesktopFrame(wx.Frame):
         self.scrolled_window.SetSizer(self.app_sizer)
         self.sizer.Add(self.scrolled_window, 1, wx.EXPAND | wx.ALL, 10)
 
+        self._wallpaper_bmp = None
+        self._wallpaper_scaled = None
+        self._load_wallpaper(ac.get("wallpaper_path", ""))
+        self.panel.Bind(wx.EVT_PAINT, self._on_paint_desktop)
+        self.Bind(wx.EVT_SIZE, self._on_frame_resize)
+
         self.panel.SetSizer(self.sizer)
 
         # Global Hotkeys
@@ -351,6 +357,65 @@ class DesktopFrame(wx.Frame):
         else:
             self.Close()
         dlg.Destroy()
+
+    def _load_wallpaper(self, path):
+        self._wallpaper_bmp = None
+        self._wallpaper_scaled = None
+        if path and os.path.exists(path):
+            try:
+                bmp = wx.Bitmap(path, wx.BITMAP_TYPE_ANY)
+                if bmp.IsOk():
+                    self._wallpaper_bmp = bmp
+                    self._wallpaper_scaled = None
+            except Exception:
+                pass
+
+    def _on_frame_resize(self, event):
+        self._wallpaper_scaled = None
+        event.Skip()
+
+    def _on_paint_desktop(self, event):
+        dc = wx.PaintDC(self.panel)
+        bmp = self._wallpaper_bmp
+        if not bmp:
+            event.Skip()
+            return
+        pw, ph = self.panel.GetSize()
+        if pw <= 0 or ph <= 0:
+            event.Skip()
+            return
+        if self._wallpaper_scaled is None:
+            style = self.appearance_config.get("wallpaper_style", "stretch")
+            bw, bh = bmp.GetSize()
+            if bw == 0 or bh == 0:
+                event.Skip(); return
+            if style == "stretch":
+                img = bmp.ConvertToImage().Scale(pw, ph, wx.IMAGE_QUALITY_HIGH)
+                self._wallpaper_scaled = {"bmp": wx.Bitmap(img), "x": 0, "y": 0, "tile": False}
+            elif style == "fit":
+                scale = min(pw / bw, ph / bh)
+                nw, nh = int(bw * scale), int(bh * scale)
+                img = bmp.ConvertToImage().Scale(nw, nh, wx.IMAGE_QUALITY_HIGH)
+                self._wallpaper_scaled = {"bmp": wx.Bitmap(img), "x": (pw - nw) // 2, "y": (ph - nh) // 2, "tile": False}
+            elif style == "center":
+                self._wallpaper_scaled = {"bmp": bmp, "x": (pw - bw) // 2, "y": (ph - bh) // 2, "tile": False}
+            elif style == "tile":
+                self._wallpaper_scaled = {"bmp": bmp, "x": 0, "y": 0, "tile": True}
+        if self._wallpaper_scaled["tile"]:
+            tb = self._wallpaper_scaled["bmp"]
+            tw, th = tb.GetSize()
+            for x in range(0, pw, tw):
+                for y in range(0, ph, th):
+                    dc.DrawBitmap(tb, x, y)
+        else:
+            dc.DrawBitmap(self._wallpaper_scaled["bmp"], self._wallpaper_scaled["x"], self._wallpaper_scaled["y"])
+
+    def set_wallpaper(self, path):
+        ac = self.appearance_config
+        ac["wallpaper_path"] = path
+        config_manager.save_appearance_config(self.data_dir, ac)
+        self._load_wallpaper(path)
+        self.panel.Refresh()
 
     def greet(self):
         msg = getattr(self, 'appearance_config', {}).get("desktop_greeting", translation._("desktop.greeting"))
