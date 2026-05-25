@@ -52,19 +52,13 @@ class BootScreen(wx.Frame):
         import ctypes
         VK_F2 = 0x71
         start = time.time()
-        held_since = None
         while time.time() - start < 4.0:
             if ctypes.windll.user32.GetAsyncKeyState(VK_F2) & 0x8000:
-                if held_since is None:
-                    held_since = time.time()
-                elif time.time() - held_since >= 3.0:
-                    self.safe_mode = True
-                    self._sub.SetLabel("Safe Mode")
-                    self._beep()
-                    speech.engine.speak("Safe Mode")
-                    return
-            else:
-                held_since = None
+                self.safe_mode = True
+                self._sub.SetLabel("Safe Mode")
+                self._beep()
+                speech.engine.speak("Safe Mode")
+                return
             wx.Yield()
             time.sleep(0.05)
         if not self.safe_mode:
