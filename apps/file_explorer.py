@@ -8,6 +8,7 @@ class FileExplorerApp(BlindApp):
         "DumpStack.log.tmp", "swapfile.sys", "pagefile.sys", "hiberfil.sys",
         "$WinREAgent", "Config.Msi", "MSOCache", "$SysReset",
         "Recovery", "Documents and Settings",
+        ".trash",
     }
 
     def __init__(self, api):
