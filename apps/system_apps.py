@@ -729,8 +729,8 @@ class SettingsApp(BlindApp):
             # 1. Pull from git
             pull_result = subprocess.run(["git", "pull"], capture_output=True, text=True)
             if pull_result.returncode != 0:
-                self.api.speak("Update failed.")
-                return
+                self.api.speak("Git pull failed; attempting full clone...")
+                self._fallback_clone()
 
             # 2. Update dependencies
             pip_result = subprocess.run(["pip", "install", "-r", "requirements.txt"], capture_output=True, text=True)
@@ -742,6 +742,42 @@ class SettingsApp(BlindApp):
         
         except Exception:
             self.api.speak("An error occurred during update.")
+
+    def _fallback_clone(self):
+        try:
+            url_result = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True, cwd=os.getcwd())
+            if url_result.returncode != 0 or not url_result.stdout.strip():
+                self.api.speak("Cannot determine remote URL.")
+                return
+            remote_url = url_result.stdout.strip()
+
+            parent = os.path.dirname(os.getcwd())
+            temp_dir = os.path.join(parent, "py-os-update-temp")
+
+            import shutil
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+            self.api.speak("Cloning repository...")
+            clone_result = subprocess.run(["git", "clone", remote_url, temp_dir], capture_output=True, text=True)
+            if clone_result.returncode != 0:
+                self.api.speak("Clone failed. Update aborted.")
+                return
+
+            for item in os.listdir(temp_dir):
+                src = os.path.join(temp_dir, item)
+                dst = os.path.join(os.getcwd(), item)
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst, ignore_errors=True)
+                    shutil.copytree(src, dst, ignore_dangling_symlinks=True)
+                else:
+                    shutil.copy2(src, dst)
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            self.api.speak("Clone complete; repository restored.")
+        except Exception as e:
+            self.api.speak(f"Clone fallback failed: {e}")
 
     def run(self):
         self.frame = wx.Frame(None, title="Settings", size=(500, 600))

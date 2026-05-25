@@ -26,3 +26,5 @@ venv/
 *.zip
 # Local status scratchpad
 PILessstatus.txt
+
+nul
