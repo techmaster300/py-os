@@ -37,7 +37,7 @@ class TerminalApp(BlindApp):
         self.input_ctrl = self.make_textctrl(self.panel, name="Command Input", style=wx.TE_PROCESS_ENTER)
         self.input_ctrl.SetBackgroundColour(wx.Colour(30, 30, 30))
         self.input_ctrl.SetForegroundColour(wx.Colour(0, 255, 0))
-        self.input_ctrl.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self._apply_output_font()
         self.input_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_key)
         sizer.Add(self.input_ctrl, 0, wx.EXPAND | wx.ALL, 10)
         self.panel.SetSizer(sizer)
@@ -50,7 +50,10 @@ class TerminalApp(BlindApp):
         self._show_app(self.input_ctrl)
 
     def _apply_output_font(self):
-        self.output_text.SetFont(wx.Font(self.font_size, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        f = wx.Font(self.font_size, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        self.output_text.SetFont(f)
+        if hasattr(self, 'input_ctrl'):
+            self.input_ctrl.SetFont(f)
 
     def on_font_up(self, event=None):
         self.font_size = min(24, self.font_size + 2)
@@ -72,7 +75,10 @@ class TerminalApp(BlindApp):
 
     def on_key(self, event):
         key = event.GetKeyCode()
-        if key == wx.WXK_UP:
+        if event.ControlDown() and key in (ord('L'), ord('l')):
+            self.output_text.Clear()
+            self.api.speak("Screen cleared.")
+        elif key == wx.WXK_UP:
             if self.history:
                 self.history_idx = max(0, self.history_idx - 1)
                 self.input_ctrl.SetValue(self.history[self.history_idx])
