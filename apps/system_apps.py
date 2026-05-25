@@ -377,6 +377,37 @@ class SettingsApp(BlindApp):
         self.api.speak("Appearance settings saved. Restart the desktop to see changes.")
         self.show_info("Appearance settings saved. Restart the desktop to see changes.")
 
+    def _reset_appearance_section(self, section, sizer, parent, old_config):
+        defaults = {
+            "desktop_bg": "#000000", "desktop_button_bg": "#282828", "desktop_button_fg": "#FFFFFF",
+            "desktop_header": "PyOS Desktop", "desktop_header_color": "#FFFFFF",
+            "desktop_header_font_size": 18, "desktop_button_font_size": 16,
+            "desktop_button_spacing": 5, "desktop_greeting": "Welcome to PyOS. Use Tab to navigate through apps, and press Enter to launch.",
+            "desktop_scroll_rate": 20, "desktop_width": 800, "desktop_height": 600,
+            "wallpaper_path": "", "wallpaper_style": "stretch",
+            "lockscreen_bg": "#000000", "lockscreen_title_color": "#FFFFFF",
+            "lockscreen_title_text": "Lock Screen", "lockscreen_title_font_size": 18,
+            "lockscreen_mode_color": "#B4B4B4", "lockscreen_status_color": "#FF5050",
+            "lockscreen_input_bg": "#1E1E1E", "lockscreen_input_fg": "#FFFFFF",
+            "lockscreen_display_font_size": 20, "lockscreen_input_font_size": 14,
+            "lockscreen_pin_font_size": 14, "lockscreen_mask_char": "*",
+            "lockscreen_width": 350, "lockscreen_height": 460,
+        }
+        keys = []
+        if section == "desktop":
+            keys = ["desktop_bg", "desktop_button_bg", "desktop_button_fg", "desktop_header",
+                    "desktop_header_color", "desktop_header_font_size", "desktop_button_font_size",
+                    "desktop_button_spacing", "desktop_greeting", "desktop_width", "desktop_height"]
+        elif section == "wallpaper":
+            keys = ["wallpaper_path", "wallpaper_style"]
+        elif section == "lockscreen":
+            keys = [k for k in defaults if k.startswith("lockscreen")]
+        ac = config_manager.load_appearance_config(self.api.data_dir)
+        for k in keys:
+            ac[k] = defaults.get(k, ac.get(k))
+        config_manager.save_appearance_config(self.api.data_dir, ac)
+        self.api.speak(f"{section.capitalize()} section reset to defaults. Apply to save changes.")
+
     def _on_wallpaper_browse(self, event):
         wildcard = "Images (*.bmp;*.jpg;*.jpeg;*.png;*.gif)|*.bmp;*.jpg;*.jpeg;*.png;*.gif"
         dlg = wx.FileDialog(self.frame, "Choose a wallpaper image", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
@@ -797,6 +828,13 @@ class SettingsApp(BlindApp):
         self.version_btn = self.make_button(gen_panel, "Version: 2026.05.22 (Click for details)", self.on_version_click, "Version Button")
         gen_sizer.Add(self.version_btn, 0, wx.ALL | wx.CENTER, 5)
 
+        import sys as _sys
+        py_ver = f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}"
+        wx_ver = wx.VERSION_STRING
+        info = self.make_static(gen_panel, f"Python {py_ver}  |  wxPython {wx_ver}", "System Info")
+        info.SetForegroundColour(wx.Colour(140, 140, 140))
+        gen_sizer.Add(info, 0, wx.ALL | wx.CENTER, 2)
+
         gen_sizer.Add(self.make_static(gen_panel, "Language:", "Language Label"), 0, wx.ALL, 10)
 
         langs = translation.available_languages()
@@ -843,6 +881,17 @@ class SettingsApp(BlindApp):
         self.speed_slider = self.make_slider(speech_panel, current_rate, 50, 400, "Speed Slider")
         self.speed_slider.Bind(wx.EVT_SLIDER, self.on_speed_change)
         speech_sizer.Add(self.speed_slider, 0, wx.EXPAND | wx.ALL, 10)
+
+        voice_list = getattr(self.api.engine, "get_sapi_voices", lambda: [])()
+        if voice_list:
+            speech_sizer.Add(self.make_static(speech_panel, "SAPI Voice:", "Voice Label"), 0, wx.ALL, 10)
+            self.voice_choice = self.make_choice(speech_panel, voice_list, "Voice Selector")
+            current_voice = getattr(self.api.engine, "_sapi_voice_index", 0)
+            if 0 <= current_voice < len(voice_list):
+                self.voice_choice.SetSelection(current_voice)
+            self.voice_choice.Bind(wx.EVT_CHOICE, self.on_voice_change)
+            speech_sizer.Add(self.voice_choice, 0, wx.EXPAND | wx.ALL, 8)
+
         speech_panel.SetSizer(speech_sizer)
 
         # --- Audio Tab ---
@@ -997,6 +1046,9 @@ class SettingsApp(BlindApp):
         row.Add(self.app_desk_height, 0, wx.ALL, 5)
         app_scroll_sizer.Add(row, 0, wx.EXPAND)
 
+        reset_desk = self.make_button(app_scroll, "Reset Desktop Section", lambda evt: self._reset_appearance_section("desktop", app_scroll_sizer, app_scroll, app_config), "Reset Desktop")
+        app_scroll_sizer.Add(reset_desk, 0, wx.CENTER | wx.TOP, 5)
+
         # Wallpaper section
         self.add_separator(app_scroll_sizer, 10, app_scroll)
 
@@ -1030,6 +1082,9 @@ class SettingsApp(BlindApp):
         self.wallpaper_style_choice.SetSelection(style_map.get(current_style, 0))
         wall_style_row.Add(self.wallpaper_style_choice, 0, wx.ALL, 5)
         app_scroll_sizer.Add(wall_style_row, 0, wx.EXPAND)
+
+        reset_wall = self.make_button(app_scroll, "Reset Wallpaper Section", lambda evt: self._reset_appearance_section("wallpaper", app_scroll_sizer, app_scroll, app_config), "Reset Wallpaper")
+        app_scroll_sizer.Add(reset_wall, 0, wx.CENTER | wx.TOP, 5)
 
         # Lock screen section
         self.add_separator(app_scroll_sizer, 10, app_scroll)
@@ -1102,6 +1157,9 @@ class SettingsApp(BlindApp):
         row.Add(self.app_lock_height, 0, wx.ALL, 5)
         app_scroll_sizer.Add(row, 0, wx.EXPAND)
 
+        reset_lock = self.make_button(app_scroll, "Reset Lock Screen Section", lambda evt: self._reset_appearance_section("lockscreen", app_scroll_sizer, app_scroll, app_config), "Reset Lock Screen")
+        app_scroll_sizer.Add(reset_lock, 0, wx.CENTER | wx.TOP, 5)
+
         # Apply button
         app_scroll_sizer.Add(self.make_button(app_scroll, "Apply & Save Appearance", self.on_apply_appearance, "Apply Appearance"), 0, wx.ALL | wx.CENTER, 15)
 
@@ -1163,6 +1221,14 @@ class SettingsApp(BlindApp):
     def on_speed_change(self, event):
         rate = self.speed_slider.GetValue()
         self.apply_speed(rate)
+
+    def on_voice_change(self, event):
+        if hasattr(self, 'voice_choice'):
+            idx = self.voice_choice.GetSelection()
+            setter = getattr(self.api.engine, "set_sapi_voice", None)
+            if setter:
+                setter(idx)
+                self.api.speak("Voice changed.")
 
     def apply_speed(self, rate):
         if hasattr(self.api.engine, "set_rate"):
