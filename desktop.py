@@ -16,6 +16,7 @@ from lockscreen import LockScreen, load_config as load_lock_config
 class BootScreen(BlindApp, wx.Frame):
     def __init__(self, safe_mode=False):
         self.safe_mode = safe_mode
+        self.recovery_mode = False
         style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
         wx.Frame.__init__(self, None, title="PyOS", size=(500, 300), style=style)
         self.Center()
@@ -28,7 +29,8 @@ class BootScreen(BlindApp, wx.Frame):
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
 
-        self._sub = self.make_static(panel, label="Safe Mode" if safe_mode else "Tap F2 for Safe Mode", font_size=16)
+        hint = "Safe Mode" if safe_mode else "F1=Recovery  F2=Safe"
+        self._sub = self.make_static(panel, hint, font_size=16)
         self._sub.SetForegroundColour(wx.Colour(180, 180, 180))
         sizer.Add(self._sub, 0, wx.ALL | wx.CENTER, 5)
 
@@ -38,38 +40,46 @@ class BootScreen(BlindApp, wx.Frame):
         self.Refresh()
         wx.CallAfter(self._sub.SetFocus)
 
-    def _beep(self):
+    def _beep(self, high=880, low=660):
         try:
             import winsound
-            winsound.Beep(880, 150)
-            winsound.Beep(660, 150)
+            winsound.Beep(high, 150)
+            winsound.Beep(low, 150)
         except Exception:
             pass
 
-    def poll_f2_for_safe_mode(self):
+    def poll_boot_keys(self):
         import ctypes
+        VK_F1 = 0x70
         VK_F2 = 0x71
         start = time.time()
         while time.time() - start < 10.0:
+            if ctypes.windll.user32.GetAsyncKeyState(VK_F1) & 0x8000:
+                self.recovery_mode = True
+                self._sub.SetLabel("Recovery Mode")
+                self._beep(660, 330)
+                speech.engine.speak("Recovery Mode")
+                return
             if ctypes.windll.user32.GetAsyncKeyState(VK_F2) & 0x8000:
                 self.safe_mode = True
                 self._sub.SetLabel("Safe Mode")
-                self._beep()
+                self._beep(880, 660)
                 speech.engine.speak("Safe Mode")
                 return
             wx.Yield()
             time.sleep(0.05)
-        if not self.safe_mode:
+        if not self.safe_mode and not self.recovery_mode:
             speech.engine.speak("PyOS")
 
     def close_after(self, delay_ms=2000):
         wx.CallLater(delay_ms, self.Close)
 
 class DesktopFrame(wx.Frame):
-    def __init__(self, safe_mode=False):
+    def __init__(self, safe_mode=False, recovery_mode=False):
         super().__init__(None, title="PyOS Desktop", size=(800, 600))
         
         self.safe_mode = safe_mode
+        self.recovery_mode = recovery_mode
         
         # Core OS path
         self.data_dir = os.path.join(os.path.expanduser("~"), ".py-os")
@@ -78,7 +88,7 @@ class DesktopFrame(wx.Frame):
             
         self.os_kernel = kernel.VirtualOS()
         self.sound_manager = sounds.SoundManager(self.data_dir)
-        if self.safe_mode:
+        if self.safe_mode or self.recovery_mode:
             self.sound_manager.current_theme = "Modern"
         self.api = SystemAPI(self, self.os_kernel, speech.engine, self.sound_manager)
         self.appearance_config = config_manager.load_appearance_config(self.data_dir)
@@ -113,12 +123,16 @@ class DesktopFrame(wx.Frame):
         
         # Desktop Header
         title = ac.get("desktop_header", "PyOS Desktop")
-        if self.safe_mode:
+        if self.recovery_mode:
+            title += " (Recovery Mode)"
+        elif self.safe_mode:
             title += " (Safe Mode)"
         self.header = wx.StaticText(self.panel, label=title)
         self.header.SetName("Desktop Header")
         self.header.SetFont(wx.Font(ac.get("desktop_header_font_size", 18), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        if self.safe_mode:
+        if self.recovery_mode:
+            self.header.SetForegroundColour(wx.Colour(255, 100, 0))
+        elif self.safe_mode:
             self.header.SetForegroundColour(wx.Colour(255, 180, 0))
         self.sizer.Add(self.header, 0, wx.ALL | wx.CENTER, 20)
 
@@ -132,7 +146,7 @@ class DesktopFrame(wx.Frame):
 
         self._wallpaper_bmp = None
         self._wallpaper_scaled = None
-        if not self.safe_mode:
+        if not self.safe_mode and not self.recovery_mode:
             self._load_wallpaper(ac.get("wallpaper_path", ""))
         self.panel.Bind(wx.EVT_PAINT, self._on_paint_desktop)
         self.Bind(wx.EVT_SIZE, self._on_frame_resize)
@@ -487,6 +501,50 @@ class DesktopFrame(wx.Frame):
         self._load_wallpaper(path)
         self.panel.Refresh()
 
+    def show_recovery_dialog(self):
+        dlg = wx.Dialog(self, title="Recovery Mode", size=(400, 320))
+        dlg.SetBackgroundColour(wx.Colour(0, 0, 0))
+        panel = wx.Panel(dlg)
+        panel.SetBackgroundColour(wx.Colour(0, 0, 0))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        title = wx.StaticText(panel, label="Recovery Mode")
+        title.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        title.SetForegroundColour(wx.Colour(255, 180, 0))
+        sizer.Add(title, 0, wx.ALL | wx.CENTER, 20)
+        opts = ["Continue normal boot", "Reset appearance settings", "Reset all settings", "Launch Safe Mode"]
+        self._recovery_choice = wx.Choice(panel, choices=opts)
+        self._recovery_choice.SetSelection(0)
+        sizer.Add(self._recovery_choice, 0, wx.EXPAND | wx.ALL, 20)
+        btn_row = wx.BoxSizer(wx.HORIZONTAL)
+        ok_btn = wx.Button(panel, wx.ID_OK, "Apply")
+        ok_btn.SetBackgroundColour(wx.Colour(60, 60, 60))
+        ok_btn.SetForegroundColour(wx.Colour(255, 255, 255))
+        btn_row.Add(ok_btn, 0, wx.ALL, 10)
+        cancel_btn = wx.Button(panel, wx.ID_CANCEL, "Cancel")
+        cancel_btn.SetBackgroundColour(wx.Colour(60, 60, 60))
+        cancel_btn.SetForegroundColour(wx.Colour(255, 255, 255))
+        btn_row.Add(cancel_btn, 0, wx.ALL, 10)
+        sizer.Add(btn_row, 0, wx.CENTER)
+        panel.SetSizer(sizer)
+        if dlg.ShowModal() == wx.ID_OK:
+            sel = self._recovery_choice.GetSelection()
+            if sel == 1:
+                apath = config_manager.get_appearance_path(self.data_dir)
+                if os.path.exists(apath):
+                    os.remove(apath)
+                self.api.speak("Appearance settings reset to defaults. Restart to apply.")
+            elif sel == 2:
+                import config_manager
+                config_manager.reset_all_configs(self.data_dir)
+                self.api.speak("All settings reset to defaults. Restart to apply.")
+            elif sel == 3:
+                import subprocess
+                subprocess.Popen([_sys.executable, __file__, "--safe"])
+                self._allow_close = True
+                self.Close()
+                wx.CallAfter(wx.Exit)
+        dlg.Destroy()
+
     def greet(self):
         msg = getattr(self, 'appearance_config', {}).get("desktop_greeting", translation._("desktop.greeting"))
         self.api.speak(msg)
@@ -499,7 +557,7 @@ class DesktopFrame(wx.Frame):
             os.makedirs(apps_dir)
         
         self.apps = []
-        if self.safe_mode:
+        if self.safe_mode or self.recovery_mode:
             safe_only = {"system_apps.py", "terminal.py", "help_app.py", "calculator.py", "text_editor.py", "clock_app.py"}
             for fname in os.listdir(apps_dir):
                 if fname in safe_only:
@@ -780,11 +838,14 @@ class DesktopFrame(wx.Frame):
 
 if __name__ == "__main__":
     _safe = "--safe" in _sys.argv
+    _recovery = "--recovery" in _sys.argv
     app = wx.App()
-    boot = BootScreen(safe_mode=_safe)
-    if not _safe:
-        boot.poll_f2_for_safe_mode()
-    desktop = DesktopFrame(safe_mode=boot.safe_mode)
+    boot = BootScreen(safe_mode=_safe or _recovery)
+    if not _safe and not _recovery:
+        boot.poll_boot_keys()
+    desktop = DesktopFrame(safe_mode=boot.safe_mode, recovery_mode=boot.recovery_mode)
+    if boot.recovery_mode:
+        wx.CallAfter(desktop.show_recovery_dialog)
     boot.close_after(1000)
     desktop.Show()
     app.MainLoop()

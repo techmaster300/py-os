@@ -76,3 +76,11 @@ def save_appearance_config(data_dir, config):
     path = get_appearance_path(data_dir)
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
+
+def reset_all_configs(data_dir):
+    path = get_config_path(data_dir)
+    if os.path.exists(path):
+        os.remove(path)
+    apath = get_appearance_path(data_dir)
+    if os.path.exists(apath):
+        os.remove(apath)
