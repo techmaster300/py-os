@@ -26,6 +26,7 @@ import json
 import os
 import socket
 import sys
+import shlex
 
 HOST = os.environ.get("PDB_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PDB_PORT", "5555"))
@@ -52,9 +53,30 @@ def send_command(cmd):
             pass
 
 
+def interactive():
+    print("PyOS Debug Bridge (PDB) - interactive mode")
+    print("Type 'help' for commands, 'exit' to quit")
+    while True:
+        try:
+            cmd = input("pdb> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        cmd = cmd.strip()
+        if not cmd:
+            continue
+        if cmd == "exit":
+            break
+        if cmd == "help":
+            print(__doc__.strip())
+            continue
+        result = send_command(cmd)
+        print(result)
+
+
 def main():
     if len(sys.argv) < 2:
-        print(__doc__)
+        interactive()
         return
 
     cmd = " ".join(sys.argv[1:])
