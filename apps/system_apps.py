@@ -790,10 +790,9 @@ class SettingsApp(BlindApp):
     def _fallback_clone(self):
         try:
             url_result = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True, cwd=os.getcwd())
-            if url_result.returncode != 0 or not url_result.stdout.strip():
-                self.api.speak("Cannot determine remote URL.")
-                return
-            remote_url = url_result.stdout.strip()
+            remote_url = url_result.stdout.strip() if url_result.returncode == 0 else ""
+            if not remote_url or "techmaster300" in remote_url:
+                remote_url = "https://github.com/tech-master33/py-os.git"
 
             parent = os.path.dirname(os.getcwd())
             temp_dir = os.path.join(parent, "py-os-update-temp")
