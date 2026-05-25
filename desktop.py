@@ -10,27 +10,25 @@ import traceback
 import config_manager
 import translation
 import sys as _sys
-from api import SystemAPI
+from api import SystemAPI, BlindApp
 from lockscreen import LockScreen, load_config as load_lock_config
 
-class BootScreen(wx.Frame):
+class BootScreen(BlindApp, wx.Frame):
     def __init__(self, safe_mode=False):
         self.safe_mode = safe_mode
         style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
-        super().__init__(None, title="PyOS", size=(500, 300), style=style)
+        wx.Frame.__init__(self, None, title="PyOS", size=(500, 300), style=style)
         self.Center()
         self.SetBackgroundColour(wx.Colour(0, 0, 0))
-        panel = wx.Panel(self)
+        panel = self.make_panel(self)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = self.vbox()
 
-        logo = wx.StaticText(panel, label="PyOS")
-        logo.SetFont(wx.Font(48, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        logo = self.make_static(panel, "PyOS", font_size=48)
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
 
-        self._sub = wx.StaticText(panel, label="Safe Mode" if safe_mode else "Hold F2 for Safe Mode")
-        self._sub.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self._sub = self.make_static(panel, label="Safe Mode" if safe_mode else "Tap F2 for Safe Mode", font_size=16)
         self._sub.SetForegroundColour(wx.Colour(180, 180, 180))
         sizer.Add(self._sub, 0, wx.ALL | wx.CENTER, 5)
 
@@ -52,7 +50,7 @@ class BootScreen(wx.Frame):
         import ctypes
         VK_F2 = 0x71
         start = time.time()
-        while time.time() - start < 4.0:
+        while time.time() - start < 10.0:
             if ctypes.windll.user32.GetAsyncKeyState(VK_F2) & 0x8000:
                 self.safe_mode = True
                 self._sub.SetLabel("Safe Mode")
@@ -787,6 +785,6 @@ if __name__ == "__main__":
     if not _safe:
         boot.poll_f2_for_safe_mode()
     desktop = DesktopFrame(safe_mode=boot.safe_mode)
-    boot.close_after(2000)
+    boot.close_after(1000)
     desktop.Show()
     app.MainLoop()
