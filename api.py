@@ -236,14 +236,19 @@ class BlindApp:
 
     # ── Control factory (auto-SetName) ─────────────────────────────────────
 
-    def make_button(self, parent, label, handler=None, name=""):
-        btn = wx.Button(parent, label=label)
+    def make_button(self, parent, label, handler=None, name="", size=None):
+        kwargs = dict(label=label)
+        if size is not None:
+            kwargs["size"] = size
+        btn = wx.Button(parent, **kwargs)
         btn.SetName(name or label)
         if handler:
             btn.Bind(wx.EVT_BUTTON, handler)
         return btn
 
-    def make_textctrl(self, parent, value="", name="", style=0, size=None):
+    def make_textctrl(self, parent, value="", name="", style=0, size=None, password=False):
+        if password:
+            style |= wx.TE_PASSWORD
         kwargs = dict(value=value, style=style)
         if size is not None:
             kwargs["size"] = size
@@ -264,19 +269,26 @@ class BlindApp:
             c.SetName(name)
         return c
 
+    def make_radio(self, parent, label, group=False, name=""):
+        rb = wx.RadioButton(parent, label=label, style=wx.RB_GROUP if group else 0)
+        rb.SetName(name or label)
+        return rb
+
     def make_listctrl(self, parent, name="", style=wx.LC_REPORT):
         ctrl = wx.ListCtrl(parent, style=style)
         if name:
             ctrl.SetName(name)
         return ctrl
 
-    def make_static(self, parent, label, name="", size=None):
+    def make_static(self, parent, label, name="", size=None, font_size=None):
         kwargs = dict(label=label)
         if size is not None:
             kwargs["size"] = size
         st = wx.StaticText(parent, **kwargs)
         if name:
             st.SetName(name)
+        if font_size:
+            st.SetFont(wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         return st
 
     def make_panel(self, parent, name=""):
@@ -482,6 +494,9 @@ class BlindApp:
             return t
         return None
 
+    def set_interval(self, interval_ms, callback):
+        return self.add_timer(interval_ms, callback)
+
     def stop_timers(self):
         for t in self._timers:
             try:
@@ -541,6 +556,16 @@ class BlindApp:
             elif kc == wx.WXK_UP:
                 wx.CallAfter(d.nav_notifications); return
         event.Skip()
+
+    def set_tick_interval(self, interval_ms):
+        self._tick_interval = interval_ms
+        if self._tick_timer:
+            self._tick_timer.Stop()
+            self._tick_timer = None
+        if interval_ms > 0 and self.frame:
+            self._tick_timer = wx.Timer(self.frame)
+            self.frame.Bind(wx.EVT_TIMER, lambda evt: self.on_tick(), self._tick_timer)
+            self._tick_timer.Start(interval_ms)
 
     # ── Terminal / helpers ────────────────────────────────────────────────
 
