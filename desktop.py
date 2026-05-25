@@ -831,6 +831,12 @@ class RecoveryMenu(wx.Frame):
         self.panel.SetSizer(sizer)
         self._update_selection()
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+        wx.CallAfter(speech.engine.speak, "PyOS Recovery. Use up down to navigate, enter to select.")
+
+    def _on_close(self, event):
+        if not getattr(self, '_allow_close', False):
+            event.Veto()
 
     def _update_selection(self):
         for i, st in enumerate(self._labels):
@@ -846,18 +852,18 @@ class RecoveryMenu(wx.Frame):
         if key == wx.WXK_UP:
             self._sel = (self._sel - 1) % len(self.items)
             self._update_selection()
-            try: import winsound; winsound.Beep(600, 30)
-            except: pass
+            speech.engine.speak(self.items[self._sel][0])
         elif key == wx.WXK_DOWN:
             self._sel = (self._sel + 1) % len(self.items)
             self._update_selection()
-            try: import winsound; winsound.Beep(600, 30)
-            except: pass
+            speech.engine.speak(self.items[self._sel][0])
         elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            speech.engine.speak(self.items[self._sel][0])
             self._execute(self._sel)
         elif ord('1') <= key <= ord('9'):
             idx = key - ord('1')
             if idx < len(self.items):
+                speech.engine.speak(self.items[idx][0])
                 self._execute(idx)
         else:
             event.Skip()
@@ -866,6 +872,8 @@ class RecoveryMenu(wx.Frame):
         self.items[idx][1]()
 
     def _reboot(self):
+        speech.engine.speak("Rebooting")
+        self._allow_close = True
         self.Close()
         wx.CallAfter(self._launch_normal)
 
@@ -875,20 +883,23 @@ class RecoveryMenu(wx.Frame):
         wx.CallAfter(wx.Exit)
 
     def _adb_placeholder(self):
-        try: import winsound; winsound.Beep(400, 300)
-        except: pass
+        speech.engine.speak("Apply update from ADB is not yet implemented")
 
     def _wipe_data(self):
         config_manager.reset_all_configs(self.data_dir)
+        speech.engine.speak("Factory reset complete")
         self._show_done("Factory reset complete")
 
     def _wipe_cache(self):
         apath = config_manager.get_appearance_path(self.data_dir)
         if os.path.exists(apath):
             os.remove(apath)
+        speech.engine.speak("Cache wiped")
         self._show_done("Cache wiped")
 
     def _safe_mode(self):
+        speech.engine.speak("Launching safe mode")
+        self._allow_close = True
         self.Close()
         wx.CallAfter(self._launch_safe)
 
