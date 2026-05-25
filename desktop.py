@@ -13,8 +13,10 @@ from api import SystemAPI
 from lockscreen import LockScreen, load_config as load_lock_config
 
 class DesktopFrame(wx.Frame):
-    def __init__(self):
+    def __init__(self, safe_mode=False):
         super().__init__(None, title="PyOS Desktop", size=(800, 600))
+        
+        self.safe_mode = safe_mode
         
         # Core OS path
         self.data_dir = os.path.join(os.path.expanduser("~"), ".py-os")
@@ -23,6 +25,8 @@ class DesktopFrame(wx.Frame):
             
         self.os_kernel = kernel.VirtualOS()
         self.sound_manager = sounds.SoundManager(self.data_dir)
+        if self.safe_mode:
+            self.sound_manager.current_theme = "Modern"
         self.api = SystemAPI(self, self.os_kernel, speech.engine, self.sound_manager)
         self.appearance_config = config_manager.load_appearance_config(self.data_dir)
         self.sys_config = config_manager.load_config(self.data_dir)
@@ -55,9 +59,14 @@ class DesktopFrame(wx.Frame):
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Desktop Header
-        self.header = wx.StaticText(self.panel, label=ac.get("desktop_header", "PyOS Desktop"))
+        title = ac.get("desktop_header", "PyOS Desktop")
+        if self.safe_mode:
+            title += " (Safe Mode)"
+        self.header = wx.StaticText(self.panel, label=title)
         self.header.SetName("Desktop Header")
         self.header.SetFont(wx.Font(ac.get("desktop_header_font_size", 18), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        if self.safe_mode:
+            self.header.SetForegroundColour(wx.Colour(255, 180, 0))
         self.sizer.Add(self.header, 0, wx.ALL | wx.CENTER, 20)
 
         self.scrolled_window = wx.ScrolledWindow(self.panel, style=wx.VSCROLL)
@@ -70,7 +79,8 @@ class DesktopFrame(wx.Frame):
 
         self._wallpaper_bmp = None
         self._wallpaper_scaled = None
-        self._load_wallpaper(ac.get("wallpaper_path", ""))
+        if not self.safe_mode:
+            self._load_wallpaper(ac.get("wallpaper_path", ""))
         self.panel.Bind(wx.EVT_PAINT, self._on_paint_desktop)
         self.Bind(wx.EVT_SIZE, self._on_frame_resize)
 
@@ -429,9 +439,15 @@ class DesktopFrame(wx.Frame):
             os.makedirs(apps_dir)
         
         self.apps = []
-        for filename in os.listdir(apps_dir):
-            if filename.endswith(".py") and filename != "__init__.py":
-                self.load_app_from_file(os.path.join(apps_dir, filename))
+        if self.safe_mode:
+            safe_only = {"system_apps.py", "terminal.py", "help_app.py", "calculator.py", "text_editor.py", "clock_app.py"}
+            for fname in os.listdir(apps_dir):
+                if fname in safe_only:
+                    self.load_app_from_file(os.path.join(apps_dir, fname))
+        else:
+            for filename in os.listdir(apps_dir):
+                if filename.endswith(".py") and filename != "__init__.py":
+                    self.load_app_from_file(os.path.join(apps_dir, filename))
 
         self.refresh_app_list()
 
@@ -703,7 +719,9 @@ class DesktopFrame(wx.Frame):
         dlg.Destroy()
 
 if __name__ == "__main__":
+    import sys as _sys
+    _safe = "--safe" in _sys.argv
     app = wx.App()
-    desktop = DesktopFrame()
+    desktop = DesktopFrame(safe_mode=_safe)
     desktop.Show()
     app.MainLoop()

@@ -1,6 +1,7 @@
 param(
     [switch]$NoShortcut,
     [switch]$NoLaunchBat,
+    [switch]$SafeShortcut,
     [string]$CloneDir = "$env:USERPROFILE\py-os"
 )
 
@@ -162,7 +163,7 @@ pause
 }
 
 if (-not $NoShortcut -and (Test-Path $BatPath)) {
-    Write-Host "[6/6] Creating desktop shortcut..." -ForegroundColor Cyan
+    Write-Host "[6/6] Creating desktop shortcuts..." -ForegroundColor Cyan
     $wshell = New-Object -ComObject WScript.Shell
     $sc = $wshell.CreateShortcut([Environment]::GetFolderPath("Desktop") + "\PyOS.lnk")
     $sc.TargetPath = "$env:SystemRoot\System32\cmd.exe"
@@ -170,7 +171,27 @@ if (-not $NoShortcut -and (Test-Path $BatPath)) {
     $sc.WorkingDirectory = $RepoDir
     $sc.Description = "PyOS Desktop Simulator"
     $sc.Save()
-    Write-Host "  -> Desktop shortcut created" -ForegroundColor Green
+    Write-Host "  -> PyOS desktop shortcut created" -ForegroundColor Green
+}
+
+if ($SafeShortcut -and (Test-Path $BatPath)) {
+    $SafeBatPath = Join-Path $RepoDir "run_pyos_safe.bat"
+    if (-not (Test-Path $SafeBatPath)) {
+        @"
+@echo off
+cd /d "%~dp0"
+call "%~dp0venv\Scripts\activate.bat"
+python desktop.py --safe
+pause
+"@ | Set-Content -Path $SafeBatPath -Encoding ASCII
+    }
+    $sc2 = $wshell.CreateShortcut([Environment]::GetFolderPath("Desktop") + "\PyOS (Safe Mode).lnk")
+    $sc2.TargetPath = "$env:SystemRoot\System32\cmd.exe"
+    $sc2.Arguments = "/c `"$SafeBatPath`""
+    $sc2.WorkingDirectory = $RepoDir
+    $sc2.Description = "PyOS Desktop Simulator (Safe Mode)"
+    $sc2.Save()
+    Write-Host "  -> PyOS Safe Mode desktop shortcut created" -ForegroundColor Green
 }
 
 # ---- Done ----
