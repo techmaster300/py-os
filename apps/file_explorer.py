@@ -3,6 +3,13 @@ import os
 from api import BlindApp
 
 class FileExplorerApp(BlindApp):
+    HIDDEN_NAMES = {
+        "$Recycle.Bin", "System Volume Information", "$RECYCLE.BIN",
+        "DumpStack.log.tmp", "swapfile.sys", "pagefile.sys", "hiberfil.sys",
+        "$WinREAgent", "Config.Msi", "MSOCache", "$SysReset",
+        "Recovery", "Documents and Settings",
+    }
+
     def __init__(self, api):
         super().__init__(api)
         self.name = "File Explorer"
@@ -73,7 +80,7 @@ class FileExplorerApp(BlindApp):
         self.list.DeleteAllItems()
         self.items = []
         try:
-            raw = os.listdir(self.current_dir)
+            raw = [n for n in os.listdir(self.current_dir) if n not in self.HIDDEN_NAMES]
             raw.sort(key=lambda x: (not os.path.isdir(os.path.join(self.current_dir, x)), x.lower()))
             for i, name in enumerate(raw):
                 full = os.path.join(self.current_dir, name)
