@@ -66,5 +66,5 @@ To get started with py-os and prepare it for use from source:
 
 ## Contributors
 
-- [techmaster300](https://github.com/techmaster300) - Original developer
+- [tech300](https://github.com/tech300) - Original developer
 - blindstar - Boot screen, recovery system, A/B partition slots, ROM manager, PDB debug bridge, safe mode, install script, sound system fixes, settings enhancements

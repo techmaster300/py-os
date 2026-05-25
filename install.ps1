@@ -101,7 +101,7 @@ if (-not $InRepo) {
     if (Test-Path $RepoDir) {
         Write-Host "  -> Directory $RepoDir already exists." -ForegroundColor Yellow
     } else {
-        & git clone https://github.com/techmaster300/py-os.git $RepoDir
+        & git clone https://github.com/tech300/py-os.git $RepoDir
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  -> Clone failed" -ForegroundColor Red
             exit 1
