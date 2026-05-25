@@ -15,6 +15,7 @@ from lockscreen import LockScreen, load_config as load_lock_config
 
 class BootScreen(wx.Frame):
     def __init__(self, safe_mode=False):
+        self.safe_mode = safe_mode
         style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
         super().__init__(None, title="PyOS", size=(500, 300), style=style)
         self.Center()
@@ -28,19 +29,46 @@ class BootScreen(wx.Frame):
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
 
-        msg = "Loading..." if not safe_mode else "Safe Mode"
-        sub = wx.StaticText(panel, label=msg)
-        sub.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        sub.SetForegroundColour(wx.Colour(180, 180, 180))
-        sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
+        self._sub = wx.StaticText(panel, label="Safe Mode" if safe_mode else "Hold F2 for Safe Mode")
+        self._sub.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self._sub.SetForegroundColour(wx.Colour(180, 180, 180))
+        sizer.Add(self._sub, 0, wx.ALL | wx.CENTER, 5)
 
         panel.SetSizer(sizer)
         self.Show()
         self.Layout()
         self.Refresh()
         wx.Yield()
-        sub.SetFocus()
-        wx.CallAfter(speech.engine.speak, "PyOS " + msg)
+        self._sub.SetFocus()
+        wx.CallAfter(speech.engine.speak, "PyOS")
+
+    def _beep(self):
+        try:
+            import winsound
+            winsound.Beep(880, 150)
+            winsound.Beep(660, 150)
+        except Exception:
+            pass
+
+    def poll_f2_for_safe_mode(self):
+        import ctypes
+        VK_F2 = 0x71
+        start = time.time()
+        held_since = None
+        while time.time() - start < 2.0:
+            if ctypes.windll.user32.GetAsyncKeyState(VK_F2) & 0x8000:
+                if held_since is None:
+                    held_since = time.time()
+                elif time.time() - held_since >= 1.2:
+                    self.safe_mode = True
+                    self._sub.SetLabel("Safe Mode")
+                    self._beep()
+                    speech.engine.speak("Safe Mode")
+                    return
+            else:
+                held_since = None
+            wx.Yield()
+            time.sleep(0.05)
 
     def close_after(self, delay_ms=2000):
         wx.CallLater(delay_ms, self.Close)
@@ -762,7 +790,9 @@ if __name__ == "__main__":
     _safe = "--safe" in _sys.argv
     app = wx.App()
     boot = BootScreen(safe_mode=_safe)
-    desktop = DesktopFrame(safe_mode=_safe)
-    boot.close_after(1800)
+    if not _safe:
+        boot.poll_f2_for_safe_mode()
+    desktop = DesktopFrame(safe_mode=boot.safe_mode)
+    boot.close_after(800)
     desktop.Show()
     app.MainLoop()
