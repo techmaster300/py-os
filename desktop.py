@@ -9,8 +9,36 @@ import time
 import traceback
 import config_manager
 import translation
+import sys as _sys
 from api import SystemAPI
 from lockscreen import LockScreen, load_config as load_lock_config
+
+class BootScreen(wx.Frame):
+    def __init__(self, safe_mode=False):
+        super().__init__(None, title="PyOS", size=(500, 300), style=wx.NO_BORDER | wx.STAY_ON_TOP)
+        self.Center()
+        panel = wx.Panel(self)
+        panel.SetBackgroundColour(wx.Colour(0, 0, 0))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        logo = wx.StaticText(panel, label="PyOS")
+        logo.SetFont(wx.Font(48, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        logo.SetForegroundColour(wx.Colour(0, 180, 255))
+        sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
+
+        sub = wx.StaticText(panel, label="Loading..." if not safe_mode else "Safe Mode")
+        sub.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sub.SetForegroundColour(wx.Colour(180, 180, 180))
+        sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
+
+        panel.SetSizer(sizer)
+        self.Show()
+        self.Layout()
+        self.Refresh()
+        wx.Yield()
+
+    def close_after(self, delay_ms=2000):
+        wx.CallLater(delay_ms, self.Close)
 
 class DesktopFrame(wx.Frame):
     def __init__(self, safe_mode=False):
@@ -179,6 +207,7 @@ class DesktopFrame(wx.Frame):
         self.api.play_sound("power_menu")
         menu = wx.Menu()
         menu.Append(5012, "Restart")
+        menu.Append(5015, "Restart in Safe Mode")
         menu.Append(5013, "Shutdown")
         menu.AppendSeparator()
         menu.Append(5014, "Emergency Shutdown")
@@ -190,10 +219,16 @@ class DesktopFrame(wx.Frame):
 
     def _on_power_action(self, event):
         id_ = event.GetId()
+        import subprocess as _subprocess
         if id_ == 5012:
-            import sys, subprocess
             self.api.play_sound("shutdown")
-            subprocess.Popen([sys.executable, __file__])
+            _subprocess.Popen([_sys.executable, __file__])
+            self._allow_close = True
+            self.Close()
+            wx.CallAfter(wx.Exit)
+        elif id_ == 5015:
+            self.api.play_sound("shutdown")
+            _subprocess.Popen([_sys.executable, __file__, "--safe"])
             self._allow_close = True
             self.Close()
             wx.CallAfter(wx.Exit)
@@ -719,9 +754,10 @@ class DesktopFrame(wx.Frame):
         dlg.Destroy()
 
 if __name__ == "__main__":
-    import sys as _sys
     _safe = "--safe" in _sys.argv
     app = wx.App()
+    boot = BootScreen(safe_mode=_safe)
     desktop = DesktopFrame(safe_mode=_safe)
+    boot.close_after(1800)
     desktop.Show()
     app.MainLoop()

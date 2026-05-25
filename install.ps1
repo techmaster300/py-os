@@ -1,7 +1,7 @@
 param(
     [switch]$NoShortcut,
     [switch]$NoLaunchBat,
-    [switch]$SafeShortcut,
+    [switch]$NoSafeShortcut,
     [string]$CloneDir = "$env:USERPROFILE\py-os"
 )
 
@@ -147,11 +147,12 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  -> Package install had warnings (check output above)" -ForegroundColor Yellow
 }
 
-# ---- 6. Launcher and shortcut ----
+# ---- 6. Launcher and shortcuts ----
 $BatPath = Join-Path $RepoDir "run_pyos.bat"
+$SafeBatPath = Join-Path $RepoDir "run_pyos_safe.bat"
 
 if (-not $NoLaunchBat) {
-    Write-Host "[6/6] Creating launch script..." -ForegroundColor Cyan
+    Write-Host "[6/6] Creating launch scripts..." -ForegroundColor Cyan
     @"
 @echo off
 cd /d "%~dp0"
@@ -159,7 +160,14 @@ call "%~dp0venv\Scripts\activate.bat"
 python desktop.py
 pause
 "@ | Set-Content -Path $BatPath -Encoding ASCII
-    Write-Host "  -> Created run_pyos.bat" -ForegroundColor Green
+    @"
+@echo off
+cd /d "%~dp0"
+call "%~dp0venv\Scripts\activate.bat"
+python desktop.py --safe
+pause
+"@ | Set-Content -Path $SafeBatPath -Encoding ASCII
+    Write-Host "  -> Created run_pyos.bat and run_pyos_safe.bat" -ForegroundColor Green
 }
 
 if (-not $NoShortcut -and (Test-Path $BatPath)) {
@@ -171,27 +179,17 @@ if (-not $NoShortcut -and (Test-Path $BatPath)) {
     $sc.WorkingDirectory = $RepoDir
     $sc.Description = "PyOS Desktop Simulator"
     $sc.Save()
-    Write-Host "  -> PyOS desktop shortcut created" -ForegroundColor Green
+    Write-Host "  -> PyOS shortcut created" -ForegroundColor Green
 }
 
-if ($SafeShortcut -and (Test-Path $BatPath)) {
-    $SafeBatPath = Join-Path $RepoDir "run_pyos_safe.bat"
-    if (-not (Test-Path $SafeBatPath)) {
-        @"
-@echo off
-cd /d "%~dp0"
-call "%~dp0venv\Scripts\activate.bat"
-python desktop.py --safe
-pause
-"@ | Set-Content -Path $SafeBatPath -Encoding ASCII
-    }
+if (-not $NoSafeShortcut -and (Test-Path $SafeBatPath)) {
     $sc2 = $wshell.CreateShortcut([Environment]::GetFolderPath("Desktop") + "\PyOS (Safe Mode).lnk")
     $sc2.TargetPath = "$env:SystemRoot\System32\cmd.exe"
     $sc2.Arguments = "/c `"$SafeBatPath`""
     $sc2.WorkingDirectory = $RepoDir
     $sc2.Description = "PyOS Desktop Simulator (Safe Mode)"
     $sc2.Save()
-    Write-Host "  -> PyOS Safe Mode desktop shortcut created" -ForegroundColor Green
+    Write-Host "  -> PyOS Safe Mode shortcut created" -ForegroundColor Green
 }
 
 # ---- Done ----
@@ -200,7 +198,8 @@ Write-Host "===== Installation complete =====" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "To launch PyOS:" -ForegroundColor White
 if (Test-Path $BatPath) {
-    Write-Host "  Run: $BatPath" -ForegroundColor Gray
+    Write-Host "  run_pyos.bat (normal) or run_pyos_safe.bat (safe mode)" -ForegroundColor Gray
+    Write-Host "  Or use the PyOS / PyOS (Safe Mode) desktop shortcuts" -ForegroundColor Gray
 } else {
     Write-Host "  cd $RepoDir" -ForegroundColor Gray
     Write-Host "  .\venv\Scripts\activate" -ForegroundColor Gray
