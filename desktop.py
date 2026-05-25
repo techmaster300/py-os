@@ -501,122 +501,6 @@ class DesktopFrame(wx.Frame):
         self._load_wallpaper(path)
         self.panel.Refresh()
 
-class RecoveryMenu(wx.Frame):
-    def __init__(self, data_dir):
-        super().__init__(None, title="PyOS Recovery", size=(600, 400))
-        self.data_dir = data_dir
-        self.Center()
-        self.SetBackgroundColour(wx.Colour(0, 0, 0))
-        self.panel = wx.Panel(self)
-        self.panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        heading = wx.StaticText(self.panel, label="PyOS Recovery")
-        heading.SetFont(wx.Font(22, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        heading.SetForegroundColour(wx.Colour(255, 180, 0))
-        sizer.Add(heading, 0, wx.ALL | wx.CENTER, 20)
-
-        sub = wx.StaticText(self.panel, label="Use UP/DOWN to navigate, ENTER to select")
-        sub.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        sub.SetForegroundColour(wx.Colour(140, 140, 140))
-        sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
-
-        self.items = [
-            ("Reboot system now", self._reboot),
-            ("Apply update from ADB", self._adb_placeholder),
-            ("Wipe data/factory reset", self._wipe_data),
-            ("Wipe cache partition", self._wipe_cache),
-            ("Launch Safe Mode", self._safe_mode),
-        ]
-        self._sel = 0
-        self._labels = []
-        for i, (text, _) in enumerate(self.items):
-            st = wx.StaticText(self.panel, label=f"  [{i+1}] {text}")
-            st.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            st.SetForegroundColour(wx.Colour(180, 180, 180))
-            self._labels.append(st)
-            sizer.Add(st, 0, wx.ALL | wx.LEFT, 5)
-
-        self.panel.SetSizer(sizer)
-        self._update_selection()
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
-
-    def _update_selection(self):
-        for i, st in enumerate(self._labels):
-            if i == self._sel:
-                st.SetForegroundColour(wx.Colour(0, 180, 255))
-                st.SetLabel(f"> [{i+1}] {self.items[i][0]}")
-            else:
-                st.SetForegroundColour(wx.Colour(180, 180, 180))
-                st.SetLabel(f"  [{i+1}] {self.items[i][0]}")
-
-    def _on_key(self, event):
-        key = event.GetKeyCode()
-        if key == wx.WXK_UP:
-            self._sel = (self._sel - 1) % len(self.items)
-            self._update_selection()
-            try: import winsound; winsound.Beep(600, 30)
-            except: pass
-        elif key == wx.WXK_DOWN:
-            self._sel = (self._sel + 1) % len(self.items)
-            self._update_selection()
-            try: import winsound; winsound.Beep(600, 30)
-            except: pass
-        elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
-            self._execute(self._sel)
-        elif ord('1') <= key <= ord('9'):
-            idx = key - ord('1')
-            if idx < len(self.items):
-                self._execute(idx)
-        else:
-            event.Skip()
-
-    def _execute(self, idx):
-        self.items[idx][1]()
-
-    def _reboot(self):
-        self.Close()
-        wx.CallAfter(self._launch_normal)
-
-    def _launch_normal(self):
-        import subprocess
-        subprocess.Popen([_sys.executable, __file__])
-        wx.CallAfter(wx.Exit)
-
-    def _adb_placeholder(self):
-        try: import winsound; winsound.Beep(400, 300)
-        except: pass
-
-    def _wipe_data(self):
-        config_manager.reset_all_configs(self.data_dir)
-        self._show_done("Factory reset complete")
-
-    def _wipe_cache(self):
-        apath = config_manager.get_appearance_path(self.data_dir)
-        if os.path.exists(apath):
-            os.remove(apath)
-        self._show_done("Cache wiped")
-
-    def _safe_mode(self):
-        self.Close()
-        wx.CallAfter(self._launch_safe)
-
-    def _launch_safe(self):
-        import subprocess
-        subprocess.Popen([_sys.executable, __file__, "--safe"])
-        wx.CallAfter(wx.Exit)
-
-    def _show_done(self, msg):
-        for st in self._labels:
-            st.Hide()
-        done = wx.StaticText(self.panel, label=msg + "\n\nPress ENTER to reboot")
-        done.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        done.SetForegroundColour(wx.Colour(0, 255, 0))
-        self.panel.GetSizer().Add(done, 0, wx.ALL | wx.CENTER, 30)
-        self.panel.Layout()
-        self._done_action = lambda: self._reboot()
-        self.Bind(wx.EVT_CHAR_HOOK, lambda e: self._reboot() if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else None)
-
     def greet(self):
         msg = getattr(self, 'appearance_config', {}).get("desktop_greeting", translation._("desktop.greeting"))
         self.api.speak(msg)
@@ -907,6 +791,122 @@ class RecoveryMenu(wx.Frame):
             self.sys_config["app_hotkeys"] = raw
             config_manager.save_config(self.data_dir, self.sys_config)
         dlg.Destroy()
+
+class RecoveryMenu(wx.Frame):
+    def __init__(self, data_dir):
+        super().__init__(None, title="PyOS Recovery", size=(600, 400))
+        self.data_dir = data_dir
+        self.Center()
+        self.SetBackgroundColour(wx.Colour(0, 0, 0))
+        self.panel = wx.Panel(self)
+        self.panel.SetBackgroundColour(wx.Colour(0, 0, 0))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        heading = wx.StaticText(self.panel, label="PyOS Recovery")
+        heading.SetFont(wx.Font(22, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        heading.SetForegroundColour(wx.Colour(255, 180, 0))
+        sizer.Add(heading, 0, wx.ALL | wx.CENTER, 20)
+
+        sub = wx.StaticText(self.panel, label="Use UP/DOWN to navigate, ENTER to select")
+        sub.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sub.SetForegroundColour(wx.Colour(140, 140, 140))
+        sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
+
+        self.items = [
+            ("Reboot system now", self._reboot),
+            ("Apply update from ADB", self._adb_placeholder),
+            ("Wipe data/factory reset", self._wipe_data),
+            ("Wipe cache partition", self._wipe_cache),
+            ("Launch Safe Mode", self._safe_mode),
+        ]
+        self._sel = 0
+        self._labels = []
+        for i, (text, _) in enumerate(self.items):
+            st = wx.StaticText(self.panel, label=f"  [{i+1}] {text}")
+            st.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            st.SetForegroundColour(wx.Colour(180, 180, 180))
+            self._labels.append(st)
+            sizer.Add(st, 0, wx.ALL | wx.LEFT, 5)
+
+        self.panel.SetSizer(sizer)
+        self._update_selection()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+
+    def _update_selection(self):
+        for i, st in enumerate(self._labels):
+            if i == self._sel:
+                st.SetForegroundColour(wx.Colour(0, 180, 255))
+                st.SetLabel(f"> [{i+1}] {self.items[i][0]}")
+            else:
+                st.SetForegroundColour(wx.Colour(180, 180, 180))
+                st.SetLabel(f"  [{i+1}] {self.items[i][0]}")
+
+    def _on_key(self, event):
+        key = event.GetKeyCode()
+        if key == wx.WXK_UP:
+            self._sel = (self._sel - 1) % len(self.items)
+            self._update_selection()
+            try: import winsound; winsound.Beep(600, 30)
+            except: pass
+        elif key == wx.WXK_DOWN:
+            self._sel = (self._sel + 1) % len(self.items)
+            self._update_selection()
+            try: import winsound; winsound.Beep(600, 30)
+            except: pass
+        elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            self._execute(self._sel)
+        elif ord('1') <= key <= ord('9'):
+            idx = key - ord('1')
+            if idx < len(self.items):
+                self._execute(idx)
+        else:
+            event.Skip()
+
+    def _execute(self, idx):
+        self.items[idx][1]()
+
+    def _reboot(self):
+        self.Close()
+        wx.CallAfter(self._launch_normal)
+
+    def _launch_normal(self):
+        import subprocess
+        subprocess.Popen([_sys.executable, __file__])
+        wx.CallAfter(wx.Exit)
+
+    def _adb_placeholder(self):
+        try: import winsound; winsound.Beep(400, 300)
+        except: pass
+
+    def _wipe_data(self):
+        config_manager.reset_all_configs(self.data_dir)
+        self._show_done("Factory reset complete")
+
+    def _wipe_cache(self):
+        apath = config_manager.get_appearance_path(self.data_dir)
+        if os.path.exists(apath):
+            os.remove(apath)
+        self._show_done("Cache wiped")
+
+    def _safe_mode(self):
+        self.Close()
+        wx.CallAfter(self._launch_safe)
+
+    def _launch_safe(self):
+        import subprocess
+        subprocess.Popen([_sys.executable, __file__, "--safe"])
+        wx.CallAfter(wx.Exit)
+
+    def _show_done(self, msg):
+        for st in self._labels:
+            st.Hide()
+        done = wx.StaticText(self.panel, label=msg + "\n\nPress ENTER to reboot")
+        done.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        done.SetForegroundColour(wx.Colour(0, 255, 0))
+        self.panel.GetSizer().Add(done, 0, wx.ALL | wx.CENTER, 30)
+        self.panel.Layout()
+        self._done_action = lambda: self._reboot()
+        self.Bind(wx.EVT_CHAR_HOOK, lambda e: self._reboot() if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else None)
 
 if __name__ == "__main__":
     _safe = "--safe" in _sys.argv
