@@ -8,13 +8,14 @@ import threading
 import time
 import traceback
 import config_manager
+import slot_manager
 import translation
 import sys as _sys
 from api import SystemAPI, BlindApp
 from lockscreen import LockScreen, load_config as load_lock_config
 
 class BootScreen(BlindApp, wx.Frame):
-    def __init__(self, safe_mode=False):
+    def __init__(self, safe_mode=False, slot="a"):
         self.safe_mode = safe_mode
         self.recovery_mode = False
         style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
@@ -28,6 +29,11 @@ class BootScreen(BlindApp, wx.Frame):
         logo = self.make_static(panel, "PyOS", font_size=48)
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
+
+        slot_text = f"Slot {slot.upper()}"
+        sl = self.make_static(panel, slot_text, font_size=11)
+        sl.SetForegroundColour(wx.Colour(100, 100, 100))
+        sizer.Add(sl, 0, wx.ALL | wx.CENTER, 2)
 
         hint = "Safe Mode" if safe_mode else "F1=Recovery  F2=Safe"
         self._sub = self.make_static(panel, hint, font_size=16)
@@ -817,6 +823,7 @@ class RecoveryMenu(wx.Frame):
             ("Apply update from ADB", self._adb_placeholder),
             ("Wipe data/factory reset", self._wipe_data),
             ("Wipe cache partition", self._wipe_cache),
+            ("Switch slot", self._switch_slot),
             ("Launch Safe Mode", self._safe_mode),
         ]
         self._sel = 0
@@ -897,6 +904,11 @@ class RecoveryMenu(wx.Frame):
         speech.engine.speak("Cache wiped")
         self._show_done("Cache wiped")
 
+    def _switch_slot(self):
+        new = slot_manager.switch_slot(self.data_dir)
+        speech.engine.speak(f"Switched to slot {new.upper()}")
+        self._show_done(f"Switched to slot {new.upper()}")
+
     def _safe_mode(self):
         speech.engine.speak("Launching safe mode")
         self._allow_close = True
@@ -922,17 +934,24 @@ class RecoveryMenu(wx.Frame):
 if __name__ == "__main__":
     _safe = "--safe" in _sys.argv
     _recovery = "--recovery" in _sys.argv
+    data_dir = os.path.join(os.path.expanduser("~"), ".py-os")
+
+    if slot_manager.should_fallback(data_dir):
+        slot_manager.switch_slot(data_dir)
+
+    slot = slot_manager.mark_boot_attempt(data_dir)
+
     app = wx.App()
-    boot = BootScreen(safe_mode=_safe or _recovery)
+    boot = BootScreen(safe_mode=_safe or _recovery, slot=slot)
     if not _safe and not _recovery:
         boot.poll_boot_keys()
     if boot.recovery_mode:
         boot.Destroy()
-        data_dir = os.path.join(os.path.expanduser("~"), ".py-os")
         rec = RecoveryMenu(data_dir)
         rec.Show()
     else:
         desktop = DesktopFrame(safe_mode=boot.safe_mode, recovery_mode=boot.recovery_mode)
+        slot_manager.mark_boot_success(data_dir)
         desktop.Show()
         boot.close_after(1000)
     app.MainLoop()
