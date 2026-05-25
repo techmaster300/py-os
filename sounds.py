@@ -43,6 +43,18 @@ except ImportError:
     HAS_SOUNDFILE = False
 
 try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
+
+try:
     import sounddevice as sd
     HAS_SOUNDDEVICE = True
 except ImportError:
@@ -281,6 +293,12 @@ class SoundManager:
                 self._executor.submit(self._play_file, data)
             else:
                 self._executor.submit(self._play_notes, data)
+
+    def preview(self, data):
+        if isinstance(data, str):
+            self._play_file_sync(data)
+        else:
+            self._play_notes_sync(data)
 
     def preview(self, data):
         if isinstance(data, str):
