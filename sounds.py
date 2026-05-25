@@ -93,33 +93,8 @@ class SoundManager:
                 "device_connect": [(440, 60), (659, 60)],
                 "device_disconnect": [(659, 60), (440, 60)]
             },
-            "Windows XP": {}
         }
         
-        # Resolve Windows XP sound file paths relative to this file's location
-        xp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds", "xp")
-        if os.path.isdir(xp_dir):
-            self.default_themes["Windows XP"] = {
-                "startup": os.path.join(xp_dir, "Windows XP Startup.wav"),
-                "nav": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
-                "launch": os.path.join(xp_dir, "Windows XP Default.wav"),
-                "close": os.path.join(xp_dir, "Windows XP Recycle.wav"),
-                "alert": os.path.join(xp_dir, "Windows XP Exclamation.wav"),
-                "shutdown": os.path.join(xp_dir, "Windows XP Shutdown.wav"),
-                "power_menu": os.path.join(xp_dir, "Windows XP Start.wav"),
-                "context_menu": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
-                "notify": os.path.join(xp_dir, "Windows XP Notify.wav"),
-                "logon": os.path.join(xp_dir, "Windows XP Logon Sound.wav"),
-                "logoff": os.path.join(xp_dir, "Windows XP Logoff Sound.wav"),
-                "error": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
-                "alarm": os.path.join(xp_dir, "Windows XP Critical Stop.wav"),
-                "timer": os.path.join(xp_dir, "Windows XP Menu Command.wav"),
-                "info": os.path.join(xp_dir, "Windows XP Information Bar.wav"),
-                "complete": os.path.join(xp_dir, "tada.wav"),
-                "device_connect": os.path.join(xp_dir, "Windows XP Hardware Insert.wav"),
-                "device_disconnect": os.path.join(xp_dir, "Windows XP Hardware Remove.wav")
-            }
-
         self.themes = self.default_themes.copy()
         custom_themes_data = self._load_all_custom_themes()
         self.themes.update(custom_themes_data)
