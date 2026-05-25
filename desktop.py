@@ -807,21 +807,34 @@ class RecoveryMenu(wx.Frame):
         self.SetBackgroundColour(wx.Colour(0, 0, 0))
         self.panel = wx.Panel(self)
         self.panel.SetBackgroundColour(wx.Colour(0, 0, 0))
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
 
         heading = wx.StaticText(self.panel, label="PyOS Recovery")
         heading.SetFont(wx.Font(22, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         heading.SetForegroundColour(wx.Colour(255, 180, 0))
-        sizer.Add(heading, 0, wx.ALL | wx.CENTER, 20)
+        self.sizer.Add(heading, 0, wx.ALL | wx.CENTER, 20)
 
         sub = wx.StaticText(self.panel, label="Use UP/DOWN to navigate, ENTER to select")
         sub.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         sub.SetForegroundColour(wx.Colour(140, 140, 140))
-        sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
+        self.sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
 
-        self.items = [
+        self._label_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self._label_sizer, 0, wx.EXPAND | wx.LEFT, 10)
+
+        self.panel.SetSizer(self.sizer)
+        self._build_menu()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+        wx.CallAfter(speech.engine.speak, "PyOS Recovery. Use up down to navigate, enter to select.")
+
+    def _build_menu(self, items=None):
+        for child in self._label_sizer.GetChildren():
+            child.GetWindow().Destroy()
+        self._label_sizer.Clear()
+        self.items = items or [
             ("Reboot system now", self._reboot),
-            ("Apply update from ADB", self._adb_placeholder),
+            ("Manage ROMs", self._rom_menu),
             ("Wipe data/factory reset", self._wipe_data),
             ("Wipe cache partition", self._wipe_cache),
             ("Switch slot", self._switch_slot),
@@ -834,13 +847,9 @@ class RecoveryMenu(wx.Frame):
             st.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
             st.SetForegroundColour(wx.Colour(180, 180, 180))
             self._labels.append(st)
-            sizer.Add(st, 0, wx.ALL | wx.LEFT, 5)
-
-        self.panel.SetSizer(sizer)
+            self._label_sizer.Add(st, 0, wx.ALL, 4)
         self._update_selection()
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
-        self.Bind(wx.EVT_CLOSE, self._on_close)
-        wx.CallAfter(speech.engine.speak, "PyOS Recovery. Use up down to navigate, enter to select.")
+        self.panel.Layout()
 
     def _on_close(self, event):
         if not getattr(self, '_allow_close', False):
@@ -876,22 +885,82 @@ class RecoveryMenu(wx.Frame):
         else:
             event.Skip()
 
-    def _execute(self, idx):
-        self.items[idx][1]()
+    def _rom_menu(self):
+        roms = rom_manager.list_roms(self.data_dir)
+        active, _ = rom_manager.get_active_rom(self.data_dir)
+        items = []
+        for name, data in roms:
+            mark = " *" if name == active else "  "
+            items.append((f"{mark}  {data.get('name', name)} v{data.get('version', '?')} by {data.get('author', '?')}", ("switch", name)))
+            if name != "Stock":
+                items.append((f"      Info / Delete", ("detail", name)))
+        items.append(("Install ROM from file", "install"))
+        items.append(("Export current config as ROM", "export"))
+        items.append(("--- Back to main menu", "back"))
+        self._build_menu(items)
 
-    def _reboot(self):
-        speech.engine.speak("Rebooting")
+    def _rom_action(self, action):
+        if action == "back":
+            self._build_menu()
+            return
+        if action == "install":
+            dlg = wx.FileDialog(self, "Select ROM file", wildcard="ROM files (*.json;*.zip)|*.json;*.zip", style=wx.FD_OPEN)
+            if dlg.ShowModal() == wx.ID_OK:
+                path = dlg.GetPath()
+                name = rom_manager.install_rom(self.data_dir, path)
+                if name:
+                    rom_manager.set_active_rom(self.data_dir, name)
+                    speech.engine.speak(f"ROM {name} installed and activated. Rebooting.")
+                    self._allow_close = True
+                    self.Close()
+                    wx.CallAfter(self._launch_normal)
+                else:
+                    speech.engine.speak("Invalid ROM file")
+            dlg.Destroy()
+            return
+        if action == "export":
+            export_path = os.path.join(self.data_dir, "exported_rom.json")
+            rom_manager.export_current_config(self.data_dir, export_path)
+            speech.engine.speak("Current configuration exported.")
+            self._show_done(f"Exported to:\n{export_path}")
+            return
+        if action[0] == "detail":
+            name = action[1]
+            rom = rom_manager.get_rom(self.data_dir, name)
+            if rom is None:
+                speech.engine.speak("ROM not found")
+                return
+            msg = (f"{rom.get('name', name)} v{rom.get('version', '?')}\n"
+                   f"by {rom.get('author', '?')}\n{rom.get('description', '')}\n\n"
+                   f"Sound: {rom.get('sound_theme', 'Modern')}\n"
+                   f"Header: {rom.get('header', '')}")
+            speech.engine.speak(f"{rom.get('name', name)} version {rom.get('version', '?')}")
+            self._show_confirm(msg, lambda: self._delete_rom(name))
+            return
+        if action[0] == "delete":
+            self._delete_rom(action[1])
+            return
+        # switch ROM
+        name = action[1]
+        rom_manager.set_active_rom(self.data_dir, name)
+        speech.engine.speak(f"ROM {name} activated. Rebooting.")
         self._allow_close = True
         self.Close()
         wx.CallAfter(self._launch_normal)
 
-    def _launch_normal(self):
-        import subprocess
-        subprocess.Popen([_sys.executable, __file__])
-        wx.CallAfter(wx.Exit)
+    def _delete_rom(self, name):
+        rom_manager.delete_rom(self.data_dir, name)
+        speech.engine.speak(f"ROM {name} deleted.")
+        self._rom_menu()
 
-    def _adb_placeholder(self):
-        speech.engine.speak("Apply update from ADB is not yet implemented")
+    def _execute(self, idx):
+        item = self.items[idx][1]
+        if isinstance(item, tuple):
+            self._rom_action(item)
+        elif callable(item):
+            item()
+        else:
+            self._rom_action(item)
 
     def _wipe_data(self):
         config_manager.reset_all_configs(self.data_dir)
@@ -921,6 +990,17 @@ class RecoveryMenu(wx.Frame):
         subprocess.Popen([_sys.executable, __file__, "--safe"])
         wx.CallAfter(wx.Exit)
 
+    def _reboot(self):
+        speech.engine.speak("Rebooting")
+        self._allow_close = True
+        self.Close()
+        wx.CallAfter(self._launch_normal)
+
+    def _launch_normal(self):
+        import subprocess
+        subprocess.Popen([_sys.executable, __file__])
+        wx.CallAfter(wx.Exit)
+
     def _show_done(self, msg):
         for st in self._labels:
             st.Hide()
@@ -929,8 +1009,22 @@ class RecoveryMenu(wx.Frame):
         done.SetForegroundColour(wx.Colour(0, 255, 0))
         self.panel.GetSizer().Add(done, 0, wx.ALL | wx.CENTER, 30)
         self.panel.Layout()
-        self._done_action = lambda: self._reboot()
         self.Bind(wx.EVT_CHAR_HOOK, lambda e: self._reboot() if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else None)
+
+    def _show_confirm(self, msg, on_confirm):
+        for st in self._labels:
+            st.Hide()
+        txt = wx.StaticText(self.panel, label=msg + "\n\nENTER to confirm  |  ESC to cancel")
+        txt.SetFont(wx.Font(14, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        txt.SetForegroundColour(wx.Colour(0, 180, 255))
+        self.panel.GetSizer().Add(txt, 0, wx.ALL | wx.CENTER, 30)
+        self.panel.Layout()
+        def handler(e):
+            if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+                on_confirm()
+            elif e.GetKeyCode() == wx.WXK_ESCAPE:
+                self._rom_menu()
+        self.Bind(wx.EVT_CHAR_HOOK, handler)
 
 if __name__ == "__main__":
     _safe = "--safe" in _sys.argv
