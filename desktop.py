@@ -42,6 +42,7 @@ class DesktopFrame(wx.Frame):
         self.active_app = None
         self.open_apps = []
         self.notifications = []
+        self._app_hotkeys = {}
         
         # Play startup sound via theme
         self.api.play_sound("startup")
@@ -90,6 +91,7 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.nav_notifications, id=ID_NAV_NOTIF)
 
         self.load_plugins()
+        self._load_hotkeys()
         self.last_activity = time.time()
         self.auto_lock_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_auto_lock_check, self.auto_lock_timer)
@@ -121,6 +123,10 @@ class DesktopFrame(wx.Frame):
                 self.show_docs(); return
             elif keycode != wx.WXK_CONTROL:
                 event.Skip(); return
+        hotkey_app = self._match_hotkey(event)
+        if hotkey_app:
+            self._launch_via_hotkey(hotkey_app)
+            return
         if keycode == wx.WXK_F1:
             self.show_help()
         elif keycode == wx.WXK_CONTROL:
@@ -263,6 +269,74 @@ class DesktopFrame(wx.Frame):
                 self.lock_check_timer.Stop()
                 self.lock_system()
 
+    def _load_hotkeys(self):
+        self._app_hotkeys = {}
+        raw = self.sys_config.get("app_hotkeys", {})
+        key_map = {v: k for k, v in raw.items()}
+        for app in self.apps:
+            if hasattr(app, 'hotkey') and app.hotkey:
+                self._app_hotkeys[app.hotkey] = app
+        for combo, app_name in key_map.items():
+            for app in self.apps:
+                if app.name == app_name:
+                    self._app_hotkeys[combo] = app
+                    break
+
+    def _launch_via_hotkey(self, app):
+        try:
+            self.active_app = app
+            self.open_apps.append(app)
+            self.api.play_sound("launch")
+            self.api.speak(translation._("desktop.launching", name=app.name))
+            app.run()
+        except Exception as e:
+            self.api.speak(f"Failed to launch {app.name}: {e}")
+
+    def _match_hotkey(self, event):
+        keycode = event.GetKeyCode()
+        parts = []
+        if event.ControlDown():
+            parts.append("Ctrl")
+        if event.AltDown():
+            parts.append("Alt")
+        if event.ShiftDown():
+            parts.append("Shift")
+        key_name = None
+        if keycode == ord('A') <= keycode <= ord('Z'):
+            key_name = chr(keycode)
+        elif keycode >= ord('0') and keycode <= ord('9'):
+            key_name = chr(keycode)
+        elif keycode == wx.WXK_F1:
+            key_name = "F1"
+        elif keycode == wx.WXK_F2:
+            key_name = "F2"
+        elif keycode == wx.WXK_F3:
+            key_name = "F3"
+        elif keycode == wx.WXK_F4:
+            key_name = "F4"
+        elif keycode == wx.WXK_F5:
+            key_name = "F5"
+        elif keycode == wx.WXK_F6:
+            key_name = "F6"
+        elif keycode == wx.WXK_F7:
+            key_name = "F7"
+        elif keycode == wx.WXK_F8:
+            key_name = "F8"
+        elif keycode == wx.WXK_F9:
+            key_name = "F9"
+        elif keycode == wx.WXK_F10:
+            key_name = "F10"
+        elif keycode == wx.WXK_F11:
+            key_name = "F11"
+        elif keycode == wx.WXK_F12:
+            key_name = "F12"
+        if not key_name:
+            return None
+        if not parts:
+            return None
+        combo = "+".join(parts) + "+" + key_name
+        return self._app_hotkeys.get(combo)
+
     def lock_system(self):
         self.api.play_sound("logoff")
         self.show_lock_screen()
@@ -352,6 +426,7 @@ class DesktopFrame(wx.Frame):
         
         self.app_sizer.Layout()
         self.panel.Layout()
+        self._load_hotkeys()
 
     def on_item_focused(self, app):
         try:
@@ -473,6 +548,10 @@ class DesktopFrame(wx.Frame):
         uninstall_item = menu.Append(wx.ID_ANY, "&Uninstall")
         self.Bind(wx.EVT_MENU, lambda evt, a=app: self.on_uninstall_app(a), uninstall_item)
 
+        menu.AppendSeparator()
+        hotkey_item = menu.Append(wx.ID_ANY, "&Set Hotkey...")
+        self.Bind(wx.EVT_MENU, lambda evt, a=app: self.on_set_hotkey(a), hotkey_item)
+
         self._menu_open = True
         btn.PopupMenu(menu)
         self._menu_open = False
@@ -529,6 +608,34 @@ class DesktopFrame(wx.Frame):
                     except Exception:
                         continue
         self.api.speak("Could not find app file to uninstall.")
+
+    def on_set_hotkey(self, app):
+        current = ""
+        for combo, a in self._app_hotkeys.items():
+            if a is app:
+                current = combo
+                break
+        dlg = wx.TextEntryDialog(self, f"Enter hotkey for {app.name}\n(e.g. Ctrl+T, Ctrl+Shift+F5)\nLeave empty to clear.", "Set Hotkey", current)
+        dlg.SetName("Hotkey Input")
+        if dlg.ShowModal() == wx.ID_OK:
+            combo = dlg.GetValue().strip()
+            raw = self.sys_config.get("app_hotkeys", {})
+            # Remove old entries for this app
+            for k, v in list(raw.items()):
+                if v == app.name:
+                    del raw[k]
+            for k, v in list(self._app_hotkeys.items()):
+                if v is app:
+                    del self._app_hotkeys[k]
+            if combo:
+                raw[combo] = app.name
+                self._app_hotkeys[combo] = app
+                self.api.speak(f"Hotkey {combo} set for {app.name}")
+            else:
+                self.api.speak(f"Hotkey cleared for {app.name}")
+            self.sys_config["app_hotkeys"] = raw
+            config_manager.save_config(self.data_dir, self.sys_config)
+        dlg.Destroy()
 
 if __name__ == "__main__":
     app = wx.App()

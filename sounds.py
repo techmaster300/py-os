@@ -255,6 +255,12 @@ class SoundManager:
             else:
                 threading.Thread(target=self._play_notes, args=(data,), daemon=True).start()
 
+    def preview(self, data):
+        if isinstance(data, str):
+            self._play_file_sync(data)
+        else:
+            self._play_notes_sync(data)
+
     def _play_notes(self, notes):
         """Play a sequence of notes — sounddevice primary, ffplay fallback."""
         if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes):

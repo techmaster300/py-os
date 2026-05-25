@@ -18,6 +18,7 @@ class BlindApp:
         self.description = "Base application class"
         self.help_text = "No help available for this app."
         self.docs = "No documentation available."
+        self.hotkey = ""
         self.frame = None
         self._accel_entries = []
         self._tick_interval = 0
