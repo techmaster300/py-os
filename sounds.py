@@ -19,42 +19,6 @@ except ImportError:
     HAS_SOUNDFILE = False
 
 try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
-try:
-    import soundfile as sf
-    HAS_SOUNDFILE = True
-except ImportError:
-    HAS_SOUNDFILE = False
-
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
-try:
-    import soundfile as sf
-    HAS_SOUNDFILE = True
-except ImportError:
-    HAS_SOUNDFILE = False
-
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
-try:
-    import soundfile as sf
-    HAS_SOUNDFILE = True
-except ImportError:
-    HAS_SOUNDFILE = False
-
-try:
     import sounddevice as sd
     HAS_SOUNDDEVICE = True
 except ImportError:
@@ -171,7 +135,7 @@ class SoundManager:
 
         # Whether to force ffplay (for debugging/custom setups)
         self._use_ffmpeg = self._load_ffmpeg_flag()
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._executor = ThreadPoolExecutor(max_workers=3)
 
     def set_volume(self, volume):
         self.volume = max(0.0, min(1.0, float(volume)))
@@ -300,21 +264,15 @@ class SoundManager:
         else:
             self._play_notes_sync(data)
 
-    def preview(self, data):
-        if isinstance(data, str):
-            self._play_file_sync(data)
-        else:
-            self._play_notes_sync(data)
-
     def _play_notes(self, notes):
-        """Play a sequence of notes — sounddevice primary, ffplay fallback."""
-        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes):
+        """Play a sequence of notes — sounddevice primary (non-blocking), ffplay fallback."""
+        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes, blocking=False):
             return
         self._play_notes_ffplay(notes)
 
     def _play_notes_sync(self, notes):
         """Play notes synchronously — sounddevice primary, ffplay fallback."""
-        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes):
+        if not self._use_ffmpeg and self._play_notes_with_sounddevice(notes, blocking=True):
             return
         self._play_notes_ffplay(notes)
 
@@ -335,7 +293,7 @@ class SoundManager:
 
     def _play_file(self, path):
         if os.path.exists(path):
-            if not self._use_ffmpeg and self._play_file_with_sounddevice(path):
+            if not self._use_ffmpeg and self._play_file_with_sounddevice(path, blocking=False):
                 return
             try:
                 clean_path = path.replace(os.sep, '/')
@@ -346,7 +304,7 @@ class SoundManager:
 
     def _play_file_sync(self, path):
         if os.path.exists(path):
-            if not self._use_ffmpeg and self._play_file_with_sounddevice(path):
+            if not self._use_ffmpeg and self._play_file_with_sounddevice(path, blocking=True):
                 return
             try:
                 clean_path = path.replace(os.sep, '/')
@@ -362,7 +320,7 @@ class SoundManager:
             outputs, config, "output_device_index", "output_device"
         )
 
-    def _play_notes_with_sounddevice(self, notes):
+    def _play_notes_with_sounddevice(self, notes, blocking=True):
         if not HAS_SOUNDDEVICE or not HAS_NUMPY or not notes:
             return False
         try:
@@ -381,16 +339,16 @@ class SoundManager:
             audio = np.concatenate([audio, np.zeros(pad_samples, dtype=np.float32)])
             device_index = self._selected_output_device_index()
             try:
-                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=blocking)
             except Exception:
                 # Fall back once to system default output device.
-                sd.play(audio, samplerate=sample_rate, device=None, blocking=True)
+                sd.play(audio, samplerate=sample_rate, device=None, blocking=blocking)
             return True
         except Exception as e:
             print(f"Sounddevice notes playback failed, falling back to ffplay: {e}")
             return False
 
-    def _play_file_with_sounddevice(self, path):
+    def _play_file_with_sounddevice(self, path, blocking=True):
         if not HAS_SOUNDDEVICE or not HAS_NUMPY:
             return False
         try:
@@ -400,10 +358,10 @@ class SoundManager:
             audio = audio * self.volume
             device_index = self._selected_output_device_index()
             try:
-                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=True)
+                sd.play(audio, samplerate=sample_rate, device=device_index, blocking=blocking)
             except Exception:
                 # Fall back once to system default output device.
-                sd.play(audio, samplerate=sample_rate, device=None, blocking=True)
+                sd.play(audio, samplerate=sample_rate, device=None, blocking=blocking)
             return True
         except Exception as e:
             print(f"Sounddevice file playback failed, falling back to ffplay: {e}")
