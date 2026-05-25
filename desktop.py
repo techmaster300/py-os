@@ -15,8 +15,10 @@ from lockscreen import LockScreen, load_config as load_lock_config
 
 class BootScreen(wx.Frame):
     def __init__(self, safe_mode=False):
-        super().__init__(None, title="PyOS", size=(500, 300), style=wx.NO_BORDER | wx.STAY_ON_TOP)
+        style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX | wx.MINIMIZE_BOX)
+        super().__init__(None, title="PyOS", size=(500, 300), style=style)
         self.Center()
+        self.SetBackgroundColour(wx.Colour(0, 0, 0))
         panel = wx.Panel(self)
         panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -26,7 +28,8 @@ class BootScreen(wx.Frame):
         logo.SetForegroundColour(wx.Colour(0, 180, 255))
         sizer.Add(logo, 0, wx.ALL | wx.CENTER, 30)
 
-        sub = wx.StaticText(panel, label="Loading..." if not safe_mode else "Safe Mode")
+        msg = "Loading..." if not safe_mode else "Safe Mode"
+        sub = wx.StaticText(panel, label=msg)
         sub.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         sub.SetForegroundColour(wx.Colour(180, 180, 180))
         sizer.Add(sub, 0, wx.ALL | wx.CENTER, 5)
@@ -36,6 +39,8 @@ class BootScreen(wx.Frame):
         self.Layout()
         self.Refresh()
         wx.Yield()
+        sub.SetFocus()
+        wx.CallAfter(speech.engine.speak, "PyOS " + msg)
 
     def close_after(self, delay_ms=2000):
         wx.CallLater(delay_ms, self.Close)
